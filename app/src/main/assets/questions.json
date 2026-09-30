@@ -2176,7 +2176,7 @@
     "category": "PHP",
     "difficulty": "Medium",
     "question": "Which operator checks for both value and type?",
-    "options": ["==", "===", "=", "!=",],
+    "options": ["==", "===", "=", "!="],
     "answer": "===",
     "explanation": "=== is strict equality (value and type).",
     "example": "3 === '3' // false"

@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DLE Adaptive Engine — UX Iteration Test Harness</title>
+  <style>
+    :root {
+      --bg: #0B0F19;
+      --surface: #151D2F;
+      --surface-variant: #1E293B;
+      --surface-card: #182236;
+      --border: rgba(255, 255, 255, 0.1);
+      --border-focus: #38BDF8;
+      --text: #F1F5F9;
+      --text-muted: #94A3B8;
+      --primary: #6366F1;
+      --primary-light: #818CF8;
+      --primary-container: rgba(99, 102, 241, 0.18);
+      --cyan: #38BDF8;
+      --cyan-container: rgba(56, 189, 248, 0.15);
+      --emerald: #10B981;
+      --emerald-container: rgba(16, 185, 129, 0.15);
+      --amber: #F59E0B;
+      --amber-container: rgba(245, 158, 11, 0.15);
+      --rose: #F43F5E;
+      --rose-container: rgba(244, 63, 94, 0.15);
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Navigation Banner */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--primary), var(--cyan));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 16px;
+      color: #FFF;
+    }
+
+    .brand-title {
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .device-toggle {
+      display: flex;
+      background: var(--surface-variant);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .device-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .device-btn.active {
+      background: var(--primary);
+      color: #FFF;
+    }
+
+    /* Main Container (Split into Test Control Panel and Interactive Canvas) */
+    .app-layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Left Sidebar: Test Controller & UX Inspector */
+    .control-panel {
+      width: 340px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .section-header {
+      padding: 14px 16px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-group {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .slider-row {
+      margin-bottom: 12px;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+
+    .slider-label span:last-child {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--cyan);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 5px;
+      border-radius: 3px;
+      background: var(--surface-variant);
+      accent-color: var(--cyan);
+      cursor: pointer;
+    }
+
+    .preset-chips {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .btn-chip {
+      background: var(--surface-variant);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.15s;
+    }
+
+    .btn-chip:hover {
+      border-color: var(--primary);
+      background: var(--primary-container);
+    }
+
+    .event-log {
+      flex: 1;
+      padding: 12px 16px;
+      background: #090D16;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .log-item {
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 3px solid var(--primary);
+      line-height: 1.4;
+    }
+
+    .log-item.level-up { border-left-color: var(--emerald); }
+    .log-item.scaffold { border-left-color: var(--amber); }
+    .log-item.deck { border-left-color: var(--cyan); }
+
+    /* Center: Device Frame Container */
+    .viewport-container {
+      flex: 1;
+      background: #080C14;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow: auto;
+    }
+
+    .device-frame {
+      width: 390px;
+      height: 820px;
+      background: var(--bg);
+      border-radius: 40px;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 10px #1E293B, 0 0 0 12px #334155;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .device-frame.tablet {
+      width: 768px;
+      height: 840px;
+      border-radius: 28px;
+    }
+
+    .device-frame.expanded {
+      width: 100%;
+      height: 100%;
+      border-radius: 12px;
+      box-shadow: none;
+    }
+
+    /* Device Top Notch */
+    .device-notch {
+      height: 24px;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 24px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    /* Screen Content & Tabs */
+    .screen-body {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Bottom App Navigation Bar */
+    .app-bottom-nav {
+      height: 60px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      flex-shrink: 0;
+    }
+
+    .nav-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 10px;
+      transition: all 0.15s;
+    }
+
+    .nav-tab.active {
+      color: var(--cyan);
+    }
+
+    .nav-icon {
+      font-size: 18px;
+    }
+
+    /* Screen Views */
+    .screen-view {
+      display: none;
+      padding: 16px;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .screen-view.active {
+      display: flex;
+    }
+
+    /* Reusable Material 3 Card Component */
+    .m3-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .m3-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+
+    .badge-primary { background: var(--primary-container); color: var(--primary-light); }
+    .badge-cyan { background: var(--cyan-container); color: var(--cyan); }
+    .badge-emerald { background: var(--emerald-container); color: var(--emerald); }
+    .badge-amber { background: var(--amber-container); color: var(--amber); }
+    .badge-rose { background: var(--rose-container); color: var(--rose); }
+
+    /* Trait Progress Bars */
+    .trait-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+
+    .trait-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+
+    .trait-bar-track {
+      height: 7px;
+      background: var(--surface-variant);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .trait-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.4s ease;
+    }
+
+    /* 2x2 Capabilities Grid */
+    .capabilities-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .cap-tile {
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+
+    .cap-tile:hover {
+      transform: translateY(-2px);
+      border-color: var(--primary-light);
+    }
+
+    .cap-icon {
+      font-size: 20px;
+      margin-bottom: 2px;
+    }
+
+    .cap-title {
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .cap-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Interactive Quiz UX */
+    .quiz-tier-banner {
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid transparent;
+    }
+
+    .options-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .option-btn {
+      background: var(--surface-card);
+      border: 1.5px solid var(--border);
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.15s;
+    }
+
+    .option-btn:hover {
+      border-color: var(--primary);
+    }
+
+    .option-btn.selected {
+      border-color: var(--primary);
+      background: var(--primary-container);
+    }
+
+    .option-btn.correct {
+      border-color: var(--emerald);
+      background: var(--emerald-container);
+    }
+
+    .option-btn.wrong {
+      border-color: var(--rose);
+      background: var(--rose-container);
+    }
+
+    .btn-action {
+      background: var(--primary);
+      color: #FFF;
+      border: none;
+      padding: 12px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      width: 100%;
+    }
+
+    .btn-action:hover { opacity: 0.9; }
+
+    /* Flashcard 3D Flip */
+    .flashcard-wrap {
+      perspective: 1000px;
+      min-height: 200px;
+      cursor: pointer;
+    }
+
+    .flashcard-inner {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      text-align: center;
+      transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      transform-style: preserve-3d;
+    }
+
+    .flashcard-inner.flipped {
+      transform: rotateY(180deg);
+    }
+
+    .flashcard-face {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 18px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border: 1px solid var(--border);
+      background: var(--surface-card);
+    }
+
+    .flashcard-back {
+      transform: rotateY(180deg);
+      background: linear-gradient(145deg, #182236, #12282C);
+      border-color: var(--cyan);
+    }
+
+    /* Matrix Heatmap Table */
+    .heatmap-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+      font-family: var(--font-mono);
+    }
+
+    .heatmap-table th, .heatmap-table td {
+      padding: 5px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .heatmap-cell {
+      border-radius: 4px;
+      padding: 4px 2px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    /* Circular Timer SVG */
+    .timer-svg {
+      transform: rotate(-90deg);
+    }
+
+    .timer-circle-bg {
+      fill: none;
+      stroke: var(--surface-variant);
+      stroke-width: 8;
+    }
+
+    .timer-circle-progress {
+      fill: none;
+      stroke: var(--primary);
+      stroke-width: 8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 1s linear;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">D</div>
+      <div>
+        <div class="brand-title">DLE Adaptive UX Test Harness</div>
+        <div class="brand-subtitle">Interactive Real-Time Design & Telemetry Simulator</div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <div class="device-toggle">
+        <button class="device-btn active" onclick="setDeviceView('mobile', this)">Mobile</button>
+        <button class="device-btn" onclick="setDeviceView('tablet', this)">Tablet</button>
+        <button class="device-btn" onclick="setDeviceView('expanded', this)">Full</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-layout">
+    <!-- Left Sidebar: Test Controller -->
+    <div class="control-panel">
+      <div class="section-header">
+        <span>Iteration State Presets</span>
+      </div>
+      <div class="panel-group">
+        <div class="preset-chips">
+          <button class="btn-chip" onclick="applyPreset('novice')">
+            <div>🌱 Novice Learner</div>
+            <div style="font-size:9px; color:var(--text-muted)">Low logins, Foundational</div>
+          </button>
+          <button class="btn-chip" onclick="applyPreset('zpd')">
+            <div>⚡ Steady ZPD</div>
+            <div style="font-size:9px; color:var(--text-muted)">Balanced, Intermediate</div>
+          </button>
+          <button class="btn-chip" onclick="applyPreset('mastery')">
+            <div>🔥 Mastery Peak</div>
+            <div style="font-size:9px; color:var(--text-muted)">High accuracy, Advanced</div>
+          </button>
+          <button class="btn-chip" onclick="applyPreset('diverged')">
+            <div>🧠 Deep Diver</div>
+            <div style="font-size:9px; color:var(--text-muted)">High time, Mod accuracy</div>
+          </button>
+        </div>
+      </div>
+
+      <div class="section-header">
+        <span>Live Telemetry Manipulator</span>
+      </div>
+      <div class="panel-group">
+        <div class="slider-row">
+          <div class="slider-label">
+            <span>Login Frequency (LF)</span>
+            <span id="val-logins">5</span>
+          </div>
+          <input type="range" id="input-logins" min="1" max="15" value="5" oninput="updateTelemetry()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label">
+            <span>Session Duration (TS)</span>
+            <span id="val-time">25m</span>
+          </div>
+          <input type="range" id="input-time" min="1" max="120" value="25" oninput="updateTelemetry()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label">
+            <span>Recent Quiz Score (QS)</span>
+            <span id="val-score">75%</span>
+          </div>
+          <input type="range" id="input-score" min="0" max="100" value="75" oninput="updateTelemetry()">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-label">
+            <span>Difficulty Tier (DF)</span>
+            <span id="val-diff">2.0</span>
+          </div>
+          <input type="range" id="input-diff" min="1" max="3" step="0.5" value="2.0" oninput="updateTelemetry()">
+        </div>
+      </div>
+
+      <div class="section-header">
+        <span>UX Interaction Event Stream</span>
+        <button style="background:none; border:none; color:var(--text-muted); font-size:10px; cursor:pointer;" onclick="clearLogs()">Clear</button>
+      </div>
+      <div class="event-log" id="event-log-container">
+        <div class="log-item">Harness initialized. Edge MLP ready (5→8→4).</div>
+      </div>
+    </div>
+
+    <!-- Center: Interactive Emulated Device -->
+    <div class="viewport-container">
+      <div class="device-frame" id="device-frame">
+        <div class="device-notch">
+          <span>09:41</span>
+          <span>5G • 100%</span>
+        </div>
+
+        <!-- Scrollable Screen Body -->
+        <div class="screen-body">
+
+          <!-- SCREEN 1: DASHBOARD -->
+          <div class="screen-view active" id="view-dashboard">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <h2 style="font-size:18px; font-weight:800;">DLE Workspace</h2>
+                <div style="font-size:11px; color:var(--text-muted);">Signed in as @learner_demo</div>
+              </div>
+              <span class="badge badge-emerald" id="dash-weights-badge">Personalized v3</span>
+            </div>
+
+            <!-- Cognitive Traits Radar Card -->
+            <div class="m3-card">
+              <div class="m3-card-header">
+                <span class="card-title">Edge Cognitive Traits</span>
+                <span style="font-size:11px; color:var(--cyan); font-weight:700;">Inference: 0.18ms</span>
+              </div>
+
+              <div class="trait-item">
+                <div class="trait-meta">
+                  <span>Conscientiousness</span>
+                  <span id="pct-conscientious" style="color:var(--primary-light); font-weight:700;">72%</span>
+                </div>
+                <div class="trait-bar-track">
+                  <div class="trait-bar-fill" id="bar-conscientious" style="width: 72%; background:var(--primary-light)"></div>
+                </div>
+              </div>
+
+              <div class="trait-item">
+                <div class="trait-meta">
+                  <span>Motivation</span>
+                  <span id="pct-motivation" style="color:var(--amber); font-weight:700;">68%</span>
+                </div>
+                <div class="trait-bar-track">
+                  <div class="trait-bar-fill" id="bar-motivation" style="width: 68%; background:var(--amber)"></div>
+                </div>
+              </div>
+
+              <div class="trait-item">
+                <div class="trait-meta">
+                  <span>Understanding</span>
+                  <span id="pct-understanding" style="color:var(--cyan); font-weight:700;">84%</span>
+                </div>
+                <div class="trait-bar-track">
+                  <div class="trait-bar-fill" id="bar-understanding" style="width: 84%; background:var(--cyan)"></div>
+                </div>
+              </div>
+
+              <div class="trait-item">
+                <div class="trait-meta">
+                  <span>Engagement</span>
+                  <span id="pct-engagement" style="color:var(--emerald); font-weight:700;">76%</span>
+                </div>
+                <div class="trait-bar-track">
+                  <div class="trait-bar-fill" id="bar-engagement" style="width: 76%; background:var(--emerald)"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Adaptive Learning Suite 2x2 Grid -->
+            <div>
+              <div style="font-size:12px; font-weight:700; margin-bottom:8px; color:var(--text-muted); text-transform:uppercase;">Adaptive Learning Suite</div>
+              <div class="capabilities-grid">
+                <div class="cap-tile" onclick="switchNav('quiz')">
+                  <div class="cap-icon">⚡</div>
+                  <div class="cap-title">Adaptive Quiz</div>
+                  <div class="cap-sub" id="dda-status-tile">Optimal ZPD (1.5x)</div>
+                </div>
+                <div class="cap-tile" onclick="switchNav('flashcards')">
+                  <div class="cap-icon">📇</div>
+                  <div class="cap-title">Leitner Deck</div>
+                  <div class="cap-sub" id="deck-status-tile">3 cards due</div>
+                </div>
+                <div class="cap-tile" onclick="switchNav('evolution')">
+                  <div class="cap-icon">📈</div>
+                  <div class="cap-title">Trajectory</div>
+                  <div class="cap-sub">+14.2% Growth</div>
+                </div>
+                <div class="cap-tile" onclick="switchNav('diagnostics')">
+                  <div class="cap-icon">🔬</div>
+                  <div class="cap-title">Diagnostics</div>
+                  <div class="cap-sub">76 Weights / MSE</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SCREEN 2: DDA QUIZ -->
+          <div class="screen-view" id="view-quiz">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <h2 style="font-size:16px; font-weight:800;">JavaScript DDA Quiz</h2>
+                <div style="font-size:11px; color:var(--text-muted);" id="quiz-q-counter">Question 3 of 10</div>
+              </div>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <span class="badge badge-amber" id="quiz-streak-badge">🔥 Streak: 2</span>
+                <span class="badge badge-primary" id="quiz-score-badge">Score: 2</span>
+              </div>
+            </div>
+
+            <!-- Dynamic Difficulty Tier Indicator -->
+            <div class="quiz-tier-banner" id="quiz-tier-banner" style="background:var(--cyan-container); border-color:var(--cyan); color:var(--cyan)">
+              <span>⚡ Zone: Optimal ZPD (1.5x Multiplier)</span>
+              <span id="tier-name-label">MEDIUM TIER</span>
+            </div>
+
+            <div class="m3-card" id="quiz-question-card">
+              <span style="font-size:11px; color:var(--text-muted);" id="quiz-q-type">Multiple Choice</span>
+              <div style="font-size:15px; font-weight:700; line-height:1.4;" id="quiz-q-text">
+                Which operator checks for strict equality in JavaScript (comparing both value and data type)?
+              </div>
+            </div>
+
+            <div class="options-list" id="quiz-options-container">
+              <button class="option-btn" onclick="selectQuizOption(0, this)">
+                <span style="font-weight:700; color:var(--text-muted);">A</span>
+                <span>==</span>
+              </button>
+              <button class="option-btn" onclick="selectQuizOption(1, this)">
+                <span style="font-weight:700; color:var(--text-muted);">B</span>
+                <span>===</span>
+              </button>
+              <button class="option-btn" onclick="selectQuizOption(2, this)">
+                <span style="font-weight:700; color:var(--text-muted);">C</span>
+                <span>=</span>
+              </button>
+              <button class="option-btn" onclick="selectQuizOption(3, this)">
+                <span style="font-weight:700; color:var(--text-muted);">D</span>
+                <span>!=</span>
+              </button>
+            </div>
+
+            <div id="quiz-feedback-box" style="display:none; padding:12px; border-radius:12px; font-size:12px;"></div>
+
+            <button class="btn-action" id="btn-quiz-submit" onclick="submitQuizAnswer()">Confirm Answer</button>
+          </div>
+
+          <!-- SCREEN 3: SPACED REPETITION FLASHCARDS -->
+          <div class="screen-view" id="view-flashcards">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <h2 style="font-size:16px; font-weight:800;">Leitner Review Deck</h2>
+                <div style="font-size:11px; color:var(--text-muted);">Spaced Repetition Memory Matrix</div>
+              </div>
+              <span class="badge badge-cyan" id="deck-total-badge">4 Cards Active</span>
+            </div>
+
+            <!-- Leitner Box Levels -->
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:6px;">
+              <div style="background:var(--rose-container); border:1px solid var(--rose); padding:6px; border-radius:8px; text-align:center;">
+                <div style="font-size:14px; font-weight:800; color:var(--rose)" id="box1-count">2</div>
+                <div style="font-size:9px; color:var(--text-muted)">Box 1 (1d)</div>
+              </div>
+              <div style="background:var(--amber-container); border:1px solid var(--amber); padding:6px; border-radius:8px; text-align:center;">
+                <div style="font-size:14px; font-weight:800; color:var(--amber)" id="box2-count">1</div>
+                <div style="font-size:9px; color:var(--text-muted)">Box 2 (3d)</div>
+              </div>
+              <div style="background:var(--cyan-container); border:1px solid var(--cyan); padding:6px; border-radius:8px; text-align:center;">
+                <div style="font-size:14px; font-weight:800; color:var(--cyan)" id="box3-count">1</div>
+                <div style="font-size:9px; color:var(--text-muted)">Box 3 (7d)</div>
+              </div>
+              <div style="background:var(--emerald-container); border:1px solid var(--emerald); padding:6px; border-radius:8px; text-align:center;">
+                <div style="font-size:14px; font-weight:800; color:var(--emerald)" id="box4-count">0</div>
+                <div style="font-size:9px; color:var(--text-muted)">Box 4 (14d)</div>
+              </div>
+            </div>
+
+            <!-- 3D Interactive Flip Card -->
+            <div class="flashcard-wrap" onclick="flipFlashcard()">
+              <div class="flashcard-inner" id="card-inner">
+                <div class="flashcard-face flashcard-front">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="badge badge-cyan">JavaScript</span>
+                    <span style="font-size:10px; color:var(--text-muted);">Tap to Reveal</span>
+                  </div>
+                  <div style="font-size:14px; font-weight:700; line-height:1.4;">
+                    What does <code style="color:var(--cyan)">Array.prototype.map()</code> return?
+                  </div>
+                  <div style="font-size:11px; color:var(--text-muted);">Box Level: 1 (Due Today)</div>
+                </div>
+
+                <div class="flashcard-face flashcard-back">
+                  <div style="font-size:11px; color:var(--emerald); font-weight:700;">Correct Concept</div>
+                  <div style="font-size:13px; font-weight:700; color:var(--text);">
+                    A brand new array populated with the results of calling a provided callback function on every element.
+                  </div>
+                  <div style="font-size:10px; color:var(--text-muted); font-family:var(--font-mono);">
+                    [1, 2].map(x => x * 2) // [2, 4]
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Review Actions -->
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+              <button style="background:var(--rose); color:#FFF; border:none; padding:12px; border-radius:12px; font-weight:700; cursor:pointer;" onclick="recordCardRecall(false)">
+                ✕ Still Hard (Box 1)
+              </button>
+              <button style="background:var(--emerald); color:#FFF; border:none; padding:12px; border-radius:12px; font-weight:700; cursor:pointer;" onclick="recordCardRecall(true)">
+                ✓ Mastered (+1 Box)
+              </button>
+            </div>
+          </div>
+
+          <!-- SCREEN 4: COGNITIVE EVOLUTION TIMELINE -->
+          <div class="screen-view" id="view-evolution">
+            <h2 style="font-size:16px; font-weight:800;">Cognitive Trait Evolution</h2>
+            <div style="font-size:11px; color:var(--text-muted);">Historical Trajectory & Growth Curves</div>
+
+            <div class="m3-card">
+              <div class="m3-card-header">
+                <span class="card-title">Mastery Trajectory (SVG)</span>
+                <span class="badge badge-emerald">+18.4% Net Growth</span>
+              </div>
+
+              <!-- SVG Multi-Series Trait Chart -->
+              <svg width="100%" height="160" viewBox="0 0 320 160" style="background:#0F172A; border-radius:10px; padding:10px;">
+                <!-- Grid Lines -->
+                <line x1="10" y1="30" x2="310" y2="30" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+                <line x1="10" y1="80" x2="310" y2="80" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+                <line x1="10" y1="130" x2="310" y2="130" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+                <!-- Understanding (Cyan) -->
+                <polyline fill="none" stroke="var(--cyan)" stroke-width="3" stroke-linecap="round" points="10,120 70,105 130,85 190,60 250,45 310,35"/>
+                <circle cx="310" cy="35" r="4" fill="var(--cyan)"/>
+
+                <!-- Conscientiousness (Indigo) -->
+                <polyline fill="none" stroke="var(--primary-light)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3,3" points="10,135 70,120 130,110 190,90 250,75 310,65"/>
+
+                <!-- Motivation (Amber) -->
+                <polyline fill="none" stroke="var(--amber)" stroke-width="2.5" stroke-linecap="round" points="10,110 70,95 130,90 190,80 250,70 310,68"/>
+              </svg>
+
+              <div style="display:flex; justify-content:space-around; font-size:10px; font-weight:600;">
+                <span style="color:var(--cyan)">● Understanding</span>
+                <span style="color:var(--primary-light)">┄ Conscientiousness</span>
+                <span style="color:var(--amber)">● Motivation</span>
+              </div>
+            </div>
+
+            <!-- Historical Snapshots -->
+            <div style="font-size:12px; font-weight:700;">Recorded Evaluation Snapshots</div>
+            <div class="m3-card" style="padding:10px 14px;">
+              <div style="display:flex; justify-content:space-between; font-size:11px;">
+                <b>Today, 14:22</b>
+                <span class="badge badge-emerald">Personalized v3</span>
+              </div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Understanding: 84% • Motivation: 68% • Engagement: 76%</div>
+            </div>
+            <div class="m3-card" style="padding:10px 14px;">
+              <div style="display:flex; justify-content:space-between; font-size:11px;">
+                <b>Yesterday, 19:40</b>
+                <span class="badge badge-primary">Personalized v2</span>
+              </div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">Understanding: 74% • Motivation: 62% • Engagement: 70%</div>
+            </div>
+          </div>
+
+          <!-- SCREEN 5: DIAGNOSTICS & TENSORS -->
+          <div class="screen-view" id="view-diagnostics">
+            <h2 style="font-size:16px; font-weight:800;">Model Weights & Loss Diagnostics</h2>
+            <div style="font-size:11px; color:var(--text-muted);">MLP Tensor Inspection (76 Parameters)</div>
+
+            <div class="m3-card">
+              <div class="m3-card-header">
+                <span class="card-title">Layer 1 Weight Heatmap (W₁)</span>
+                <span class="badge badge-cyan">8 × 5 Tensor</span>
+              </div>
+
+              <div style="overflow-x:auto;">
+                <table class="heatmap-table">
+                  <thead>
+                    <tr>
+                      <th>Node</th>
+                      <th>LF</th>
+                      <th>TS</th>
+                      <th>QS</th>
+                      <th>DF</th>
+                      <th>CT</th>
+                    </tr>
+                  </thead>
+                  <tbody id="w1-heatmap-body">
+                    <!-- Dynamic Rows -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- MSE Convergence Loss -->
+            <div class="m3-card">
+              <div class="m3-card-header">
+                <span class="card-title">MSE Loss Convergence</span>
+                <span class="badge badge-emerald" id="diag-loss-badge">Loss: 0.0384</span>
+              </div>
+              <svg width="100%" height="80" viewBox="0 0 300 80" style="background:#0F172A; border-radius:8px;">
+                <polyline fill="none" stroke="var(--cyan)" stroke-width="2.5" stroke-linecap="round" points="10,70 60,45 120,30 180,22 240,16 290,12"/>
+                <circle cx="290" cy="12" r="3.5" fill="var(--cyan)"/>
+              </svg>
+              <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted);">
+                <span>Initial Loss: 0.1620</span>
+                <span style="color:var(--cyan); font-weight:700;">Converged: -76.3%</span>
+              </div>
+            </div>
+
+            <!-- Live Epoch Progress Bar Component -->
+            <div class="m3-card" id="web-epoch-card">
+              <div class="m3-card-header">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:16px;">⚙️</span>
+                  <div>
+                    <div style="font-size:12px; font-weight:700;" id="web-epoch-status">Epoch Training Tracker</div>
+                    <div style="font-size:10px; color:var(--text-muted);">Backprop + Momentum Optimizer</div>
+                  </div>
+                </div>
+                <span class="badge badge-cyan" id="web-epoch-badge">0%</span>
+              </div>
+
+              <!-- Animated Progress Bar Track -->
+              <div class="trait-bar-track" style="height:10px; border-radius:5px;">
+                <div class="trait-bar-fill" id="web-epoch-fill" style="width: 0%; background:var(--cyan); border-radius:5px; transition: width 0.15s ease;"></div>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; font-size:11px;">
+                <span id="web-epoch-text">Epoch 0 of 15 completed</span>
+                <span style="font-family:var(--font-mono); color:var(--cyan); font-weight:700;" id="web-epoch-loss">Live Loss: 0.1620</span>
+              </div>
+
+              <button class="btn-action" id="btn-run-epochs" onclick="simulateEpochTraining()" style="margin-top:4px; padding:10px; font-size:12px;">
+                ▶ Run 15 Calibration Epochs
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Bottom Navigation Bar -->
+        <div class="app-bottom-nav">
+          <button class="nav-tab active" onclick="switchNav('dashboard', this)">
+            <span class="nav-icon">🏠</span>
+            <span>Home</span>
+          </button>
+          <button class="nav-tab" onclick="switchNav('quiz', this)">
+            <span class="nav-icon">⚡</span>
+            <span>DDA Quiz</span>
+          </button>
+          <button class="nav-tab" onclick="switchNav('flashcards', this)">
+            <span class="nav-icon">📇</span>
+            <span>Deck</span>
+          </button>
+          <button class="nav-tab" onclick="switchNav('evolution', this)">
+            <span class="nav-icon">📈</span>
+            <span>History</span>
+          </button>
+          <button class="nav-tab" onclick="switchNav('diagnostics', this)">
+            <span class="nav-icon">🔬</span>
+            <span>Diag</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    const state = {
+      logins: 5,
+      timeSpent: 25,
+      quizScore: 75,
+      difficulty: 2.0,
+      streak: 2,
+      ddaTier: 'Medium',
+      deck: [
+        { id: 1, box: 1, q: "Array.prototype.map() return value" },
+        { id: 2, box: 1, q: "CSS Flexbox align-items default" },
+        { id: 3, box: 2, q: "Python list comprehension syntax" },
+        { id: 4, box: 3, q: "MySQL INNER JOIN semantics" }
+      ],
+      selectedQuizOption: null
+    };
+
+    // Logging helper
+    function logEvent(text, type = '') {
+      const container = document.getElementById('event-log-container');
+      const item = document.createElement('div');
+      item.className = `log-item ${type}`;
+      const time = new Date().toTimeString().split(' ')[0];
+      item.innerText = `[${time}] ${text}`;
+      container.prepend(item);
+    }
+
+    function clearLogs() {
+      document.getElementById('event-log-container').innerHTML = '';
+    }
+
+    // Device View Toggle
+    function setDeviceView(view, btn) {
+      document.querySelectorAll('.device-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const frame = document.getElementById('device-frame');
+      frame.classList.remove('tablet', 'expanded');
+      if (view === 'tablet') frame.classList.add('tablet');
+      if (view === 'expanded') frame.classList.add('expanded');
+      logEvent(`Viewport changed to: ${view}`);
+    }
+
+    // Navigation Switcher
+    function switchNav(screenId, btn) {
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      else {
+        const tabs = document.querySelectorAll('.nav-tab');
+        const map = { dashboard: 0, quiz: 1, flashcards: 2, evolution: 3, diagnostics: 4 };
+        if (map[screenId] !== undefined) tabs[map[screenId]].classList.add('active');
+      }
+
+      document.querySelectorAll('.screen-view').forEach(v => v.classList.remove('active'));
+      const target = document.getElementById(`view-${screenId}`);
+      if (target) target.classList.add('active');
+      logEvent(`Navigated to: ${screenId}`);
+    }
+
+    // Telemetry Engine (MLP calculation approximation)
+    function updateTelemetry() {
+      state.logins = parseInt(document.getElementById('input-logins').value);
+      state.timeSpent = parseInt(document.getElementById('input-time').value);
+      state.quizScore = parseInt(document.getElementById('input-score').value);
+      state.difficulty = parseFloat(document.getElementById('input-diff').value);
+
+      document.getElementById('val-logins').innerText = state.logins;
+      document.getElementById('val-time').innerText = `${state.timeSpent}m`;
+      document.getElementById('val-score').innerText = `${state.quizScore}%`;
+      document.getElementById('val-diff').innerText = state.difficulty.toFixed(1);
+
+      // Model Calculations
+      const c = Math.min(0.96, Math.max(0.2, (state.logins / 10) * 0.7 + (state.timeSpent / 100) * 0.3));
+      const m = Math.min(0.95, Math.max(0.2, (state.timeSpent / 40) * 0.5 + (state.quizScore / 100) * 0.5));
+      const u = Math.min(0.98, Math.max(0.1, (state.quizScore / 100) * 0.75 + (state.difficulty / 3) * 0.25));
+      const e = Math.min(0.95, Math.max(0.15, (state.quizScore / 100) * 0.5 + (state.logins / 10) * 0.5));
+
+      setTrait('conscientious', c);
+      setTrait('motivation', m);
+      setTrait('understanding', u);
+      setTrait('engagement', e);
+    }
+
+    function setTrait(name, val) {
+      const pct = Math.round(val * 100);
+      document.getElementById(`pct-${name}`).innerText = `${pct}%`;
+      document.getElementById(`bar-${name}`).style.width = `${pct}%`;
+    }
+
+    // Preset configurations
+    function applyPreset(preset) {
+      if (preset === 'novice') {
+        document.getElementById('input-logins').value = 2;
+        document.getElementById('input-time').value = 5;
+        document.getElementById('input-score').value = 45;
+        document.getElementById('input-diff').value = 1.0;
+        logEvent('Applied Novice Learner preset');
+      } else if (preset === 'zpd') {
+        document.getElementById('input-logins').value = 5;
+        document.getElementById('input-time').value = 25;
+        document.getElementById('input-score').value = 75;
+        document.getElementById('input-diff').value = 2.0;
+        logEvent('Applied Steady ZPD preset');
+      } else if (preset === 'mastery') {
+        document.getElementById('input-logins').value = 12;
+        document.getElementById('input-time').value = 60;
+        document.getElementById('input-score').value = 95;
+        document.getElementById('input-diff').value = 3.0;
+        logEvent('Applied Mastery Peak preset');
+      } else if (preset === 'diverged') {
+        document.getElementById('input-logins').value = 6;
+        document.getElementById('input-time').value = 65;
+        document.getElementById('input-score').value = 55;
+        document.getElementById('input-diff').value = 2.0;
+        logEvent('Applied Persistent Deep Diver preset');
+      }
+      updateTelemetry();
+    }
+
+    // Quiz Option Click
+    function selectQuizOption(idx, el) {
+      document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+      el.classList.add('selected');
+      state.selectedQuizOption = idx;
+    }
+
+    // Quiz Answer Evaluation & DDA Escalation
+    function submitQuizAnswer() {
+      const btn = document.getElementById('btn-quiz-submit');
+      const feedback = document.getElementById('quiz-feedback-box');
+
+      if (btn.innerText === 'Next Question →') {
+        // Reset for next
+        btn.innerText = 'Confirm Answer';
+        feedback.style.display = 'none';
+        document.querySelectorAll('.option-btn').forEach(b => {
+          b.className = 'option-btn';
+        });
+        state.selectedQuizOption = null;
+        return;
+      }
+
+      if (state.selectedQuizOption === null) {
+        alert('Please choose an answer option.');
+        return;
+      }
+
+      const isCorrect = state.selectedQuizOption === 1; // '===' is index 1
+      const options = document.querySelectorAll('.option-btn');
+
+      if (isCorrect) {
+        options[1].classList.add('correct');
+        state.streak++;
+        feedback.style.display = 'block';
+        feedback.style.background = 'var(--emerald-container)';
+        feedback.style.border = '1px solid var(--emerald)';
+        feedback.style.color = 'var(--emerald)';
+        feedback.innerHTML = '<b>✓ Correct!</b> "===" tests strict equality with zero implicit type coercion.';
+
+        // DDA Escalation
+        if (state.streak >= 4) {
+          state.ddaTier = 'Hard';
+          updateDdaBanner('Mastery Peak Tier (2.0x)', 'HARD TIER', 'var(--rose)');
+          logEvent('DDA Trigger: Escalated to Mastery Peak Tier (Hard)', 'level-up');
+        } else if (state.streak >= 2) {
+          state.ddaTier = 'Medium';
+          updateDdaBanner('Optimal ZPD (1.5x)', 'MEDIUM TIER', 'var(--cyan)');
+          logEvent('DDA Trigger: Promoted to Optimal ZPD (Medium)', 'level-up');
+        }
+      } else {
+        options[state.selectedQuizOption].classList.add('wrong');
+        options[1].classList.add('correct');
+        state.streak = 0;
+        feedback.style.display = 'block';
+        feedback.style.background = 'var(--rose-container)';
+        feedback.style.border = '1px solid var(--rose)';
+        feedback.style.color = 'var(--rose)';
+        feedback.innerHTML = '<b>✕ Incorrect.</b> Saved question to Leitner Spaced Repetition deck for memory reinforcement.';
+
+        // DDA Scaffolding step-down
+        state.ddaTier = 'Easy';
+        updateDdaBanner('Foundational Scaffolding (1.0x)', 'EASY TIER', 'var(--amber)');
+        logEvent('DDA Trigger: Provided foundational scaffolding tier', 'scaffold');
+
+        // Add to deck
+        state.deck.push({ id: Date.now(), box: 1, q: "Strict equality operator in JavaScript" });
+        updateDeckCounts();
+        logEvent('Question enrolled into Box 1 of Leitner Spaced Repetition Deck', 'deck');
+      }
+
+      document.getElementById('quiz-streak-badge').innerText = `🔥 Streak: ${state.streak}`;
+      btn.innerText = 'Next Question →';
+    }
+
+    function updateDdaBanner(zone, name, color) {
+      const b = document.getElementById('quiz-tier-banner');
+      b.style.borderColor = color;
+      b.style.color = color;
+      b.children[0].innerText = `⚡ Zone: ${zone}`;
+      b.children[1].innerText = name;
+    }
+
+    // Flashcard Flip
+    function flipFlashcard() {
+      document.getElementById('card-inner').classList.toggle('flipped');
+    }
+
+    function recordCardRecall(remembered) {
+      if (remembered) {
+        logEvent('Flashcard recalled successfully -> Promoted to Box 2 (+3 days)', 'level-up');
+      } else {
+        logEvent('Flashcard missed -> Reset to Box 1 for immediate consolidation', 'scaffold');
+      }
+      document.getElementById('card-inner').classList.remove('flipped');
+    }
+
+    function updateDeckCounts() {
+      const b1 = state.deck.filter(c => c.box === 1).length;
+      const b2 = state.deck.filter(c => c.box === 2).length;
+      const b3 = state.deck.filter(c => c.box === 3).length;
+      const b4 = state.deck.filter(c => c.box >= 4).length;
+
+      document.getElementById('box1-count').innerText = b1;
+      document.getElementById('box2-count').innerText = b2;
+      document.getElementById('box3-count').innerText = b3;
+      document.getElementById('box4-count').innerText = b4;
+      document.getElementById('deck-status-tile').innerText = `${b1} cards due`;
+      document.getElementById('deck-total-badge').innerText = `${state.deck.length} Cards Active`;
+    }
+
+    // Populate Heatmap Table
+    function initHeatmap() {
+      const tbody = document.getElementById('w1-heatmap-body');
+      tbody.innerHTML = '';
+      // 8 neurons x 5 inputs
+      for (let h = 0; h < 8; h++) {
+        const tr = document.createElement('tr');
+        const th = document.createElement('td');
+        th.style.fontWeight = 'bold';
+        th.style.color = 'var(--cyan)';
+        th.innerText = `h${h}`;
+        tr.appendChild(th);
+
+        for (let inIdx = 0; inIdx < 5; inIdx++) {
+          const val = (Math.sin(h * 1.5 + inIdx * 0.8) * 0.65).toFixed(2);
+          const td = document.createElement('td');
+          const cell = document.createElement('div');
+          cell.className = 'heatmap-cell';
+          const isPos = parseFloat(val) >= 0;
+          cell.style.background = isPos ? `rgba(16, 185, 129, ${Math.abs(val)})` : `rgba(244, 63, 94, ${Math.abs(val)})`;
+          cell.innerText = (isPos ? '+' : '') + val;
+          cell.onclick = () => logEvent(`Inspected W₁ Weight: In[${inIdx}] -> Hidden[${h}] = ${val}`);
+          td.appendChild(cell);
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+    }
+
+    // Simulate Epoch Training Progress Bar
+    function simulateEpochTraining() {
+      const btn = document.getElementById('btn-run-epochs');
+      const badge = document.getElementById('web-epoch-badge');
+      const fill = document.getElementById('web-epoch-fill');
+      const text = document.getElementById('web-epoch-text');
+      const lossEl = document.getElementById('web-epoch-loss');
+      const status = document.getElementById('web-epoch-status');
+
+      btn.disabled = true;
+      btn.innerText = "⏳ Computing Gradients...";
+      status.innerText = "Optimizing On-Device Gradients...";
+      let currentEpoch = 0;
+      const totalEpochs = 15;
+      let initialLoss = 0.1620;
+
+      const interval = setInterval(() => {
+        currentEpoch++;
+        const pct = Math.round((currentEpoch / totalEpochs) * 100);
+        const loss = (initialLoss * Math.exp(-0.1 * currentEpoch)).toFixed(4);
+
+        fill.style.width = `${pct}%`;
+        badge.innerText = `${pct}%`;
+        text.innerText = `Epoch ${currentEpoch} of ${totalEpochs} completed`;
+        lossEl.innerText = `Live Loss: ${loss}`;
+
+        logEvent(`Epoch ${currentEpoch}/${totalEpochs} (${pct}%) — MSE Loss: ${loss}`);
+
+        if (currentEpoch >= totalEpochs) {
+          clearInterval(interval);
+          btn.disabled = false;
+          btn.innerText = "✓ Calibration Complete (Run Again)";
+          status.innerText = "Calibration Epochs Converged";
+          badge.className = "badge badge-emerald";
+          fill.style.background = "var(--emerald)";
+          document.getElementById('diag-loss-badge').innerText = `Loss: ${loss}`;
+          logEvent(`On-device model calibration completed with final MSE Loss: ${loss}`, 'level-up');
+        }
+      }, 120);
+    }
+
+    // Initialize
+    updateTelemetry();
+    updateDeckCounts();
+    initHeatmap();
+  </script>
+</body>
+</html>

@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.dle_prototype.data.DatabaseHelper
 import com.example.dle_prototype.data.User
+import com.example.dle_prototype.notifications.DailyStreakReminderManager
 import com.example.dle_prototype.ui.screens.AuthScreen
 import com.example.dle_prototype.ui.screens.DashboardScreen
 import com.example.dle_prototype.ui.screens.DiagnosticsScreen
@@ -26,6 +27,7 @@ import com.example.dle_prototype.ui.screens.FederatedLabScreen
 import com.example.dle_prototype.ui.screens.FlashcardReviewScreen
 import com.example.dle_prototype.ui.screens.FocusSessionScreen
 import com.example.dle_prototype.ui.screens.QuizScreen
+import com.example.dle_prototype.ui.screens.SettingsScreen
 import com.example.dle_prototype.ui.screens.TrainingStudioScreen
 import com.example.dle_prototype.ui.screens.TraitEvolutionScreen
 import com.example.dle_prototype.ui.screens.UxTestViewScreen
@@ -35,7 +37,7 @@ import kotlinx.coroutines.launch
 sealed class Screen {
     data object Auth : Screen()
     data object Dashboard : Screen()
-    data class Quiz(val categoryName: String, val categoryNumber: Float) : Screen()
+    data class Quiz(val categoryName: String, val categoryNumber: Float, val initialTier: String? = null) : Screen()
     data object Diagnostics : Screen()
     data object Training : Screen()
     data object Flashcards : Screen()
@@ -43,6 +45,7 @@ sealed class Screen {
     data object FocusSession : Screen()
     data object FederatedLab : Screen()
     data object UxTestView : Screen()
+    data object Settings : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -58,11 +61,21 @@ class MainActivity : ComponentActivity() {
         dbHelper = DatabaseHelper.getInstance(this)
         sessionStartTime = System.currentTimeMillis()
 
+        // Initialize notification channel and restore scheduled streak alarms
+        DailyStreakReminderManager.createNotificationChannel(this)
+        if (DailyStreakReminderManager.isReminderEnabled(this)) {
+            val (hour, minute) = DailyStreakReminderManager.getReminderTime(this)
+            DailyStreakReminderManager.scheduleDailyReminder(this, hour, minute)
+        }
+
+        val startQuizFromNotification = intent?.getBooleanExtra("EXTRA_START_QUIZ", false) ?: false
+
         setContent {
             DLETheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     DleApp(
                         dbHelper = dbHelper,
+                        startQuizImmediately = startQuizFromNotification,
                         onUserChanged = { user ->
                             activeUsername = user?.username
                         }
@@ -92,6 +105,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun DleApp(
     dbHelper: DatabaseHelper,
+    startQuizImmediately: Boolean = false,
     onUserChanged: (User?) -> Unit
 ) {
     var currentUser by remember { mutableStateOf<User?>(null) }
@@ -109,7 +123,11 @@ fun DleApp(
                     onLoginSuccess = { user ->
                         currentUser = user
                         onUserChanged(user)
-                        currentScreen = Screen.Dashboard
+                        currentScreen = if (startQuizImmediately) {
+                            Screen.Quiz("General Science", 1f)
+                        } else {
+                            Screen.Dashboard
+                        }
                     }
                 )
             }
@@ -120,6 +138,9 @@ fun DleApp(
                         dbHelper = dbHelper,
                         onStartQuiz = { catName, catNum ->
                             currentScreen = Screen.Quiz(catName, catNum)
+                        },
+                        onStartPersonalizedQuiz = { catName, catNum, tier ->
+                            currentScreen = Screen.Quiz(catName, catNum, tier)
                         },
                         onOpenDiagnostics = {
                             currentScreen = Screen.Diagnostics
@@ -142,6 +163,9 @@ fun DleApp(
                         onOpenUxTest = {
                             currentScreen = Screen.UxTestView
                         },
+                        onOpenSettings = {
+                            currentScreen = Screen.Settings
+                        },
                         onLogout = {
                             currentUser = null
                             onUserChanged(null)
@@ -159,6 +183,7 @@ fun DleApp(
                         categoryName = screen.categoryName,
                         categoryNumber = screen.categoryNumber,
                         dbHelper = dbHelper,
+                        initialTier = screen.initialTier,
                         onQuizCompleted = {
                             currentScreen = Screen.Dashboard
                         },
@@ -250,6 +275,18 @@ fun DleApp(
                         currentScreen = Screen.Dashboard
                     }
                 )
+            }
+            is Screen.Settings -> {
+                currentUser?.let { user ->
+                    SettingsScreen(
+                        user = user,
+                        onBack = {
+                            currentScreen = Screen.Dashboard
+                        }
+                    )
+                } ?: run {
+                    currentScreen = Screen.Auth
+                }
             }
         }
     }

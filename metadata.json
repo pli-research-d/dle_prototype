@@ -1,6 +1,6 @@
 {
-  "name": "DLE Prototype",
-  "description": "Dynamic Learning Environment prototype with on-device personalization and federated learning",
+  "name": "PLi",
+  "description": "Personal Learning Intelligence with On-Device AI",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

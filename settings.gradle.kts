@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "dle_prototype"
+rootProject.name = "PLi"
 include(":app")

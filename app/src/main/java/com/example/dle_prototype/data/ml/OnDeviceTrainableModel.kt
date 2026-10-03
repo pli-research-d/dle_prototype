@@ -1,7 +1,9 @@
 package com.example.dle_prototype.data.ml
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.exp
@@ -152,15 +154,20 @@ data class TrainingProgress(
 )
 
 data class TrainingCheckpoint(
+    val id: Long = 0,
     val username: String,
     val sessionId: String,
+    val checkpointName: String = "",
     val currentEpoch: Int,
     val targetEpochs: Int,
     val currentLoss: Float,
+    val accuracyPct: Float = 0f,
     val lossHistory: List<Float>,
     val weights: ModelWeights,
     val savedAt: Long = System.currentTimeMillis(),
-    val isCompleted: Boolean = false
+    val isCompleted: Boolean = false,
+    val isBest: Boolean = false,
+    val triggerType: String = "PERIODIC" // "PERIODIC", "ACCURACY_DROP", "MANUAL", "COMPLETION", "PRE_TRAINING"
 ) {
     fun lossHistoryToJson(): String {
         return lossHistory.joinToString(separator = ",", prefix = "[", postfix = "]")
@@ -284,6 +291,7 @@ class OnDeviceTrainableModel(
 
     /**
      * Train on-device using Gradient Descent with Momentum and periodic checkpointing.
+     * Supports validation accuracy tracking, accuracy drop detection, and optional auto-revert to best state.
      */
     suspend fun train(
         dataset: List<TrainingSample>,
@@ -293,7 +301,14 @@ class OnDeviceTrainableModel(
         learningRate: Float = 0.08f,
         momentum: Float = 0.9f,
         checkpointInterval: Int = 3,
+        accuracyEvaluator: ((ModelWeights) -> Float)? = null,
+        autoRevertOnDrop: Boolean = false,
+        accuracyDropThreshold: Float = 0.05f,
         onCheckpoint: (suspend (epoch: Int, totalEpochs: Int, currentLoss: Float, currentWeights: ModelWeights, lossHistory: List<Float>) -> Unit)? = null,
+        onCheckpointExtended: (suspend (epoch: Int, totalEpochs: Int, currentLoss: Float, accuracyPct: Float, currentWeights: ModelWeights, lossHistory: List<Float>, isBest: Boolean, isDropDetected: Boolean) -> Unit)? = null,
+        onAccuracyDrop: (suspend (epoch: Int, currentLoss: Float, currentAccuracy: Float, bestEpoch: Int, bestLoss: Float, bestAccuracy: Float, bestWeights: ModelWeights) -> Unit)? = null,
+        thermalPacingDelayMs: Long = 0L,
+        onThermalPacedYield: ((delayMs: Long) -> Unit)? = null,
         onProgress: (TrainingProgress) -> Unit = {}
     ): TrainingResult = withContext(Dispatchers.Default) {
         if (dataset.isEmpty()) {
@@ -302,6 +317,11 @@ class OnDeviceTrainableModel(
 
         val initialLoss = if (initialLossHistory.isNotEmpty()) initialLossHistory.first() else computeLoss(dataset)
         val lossHistory = initialLossHistory.toMutableList()
+
+        var bestLoss = if (initialLossHistory.isNotEmpty()) initialLossHistory.minOrNull() ?: Float.MAX_VALUE else Float.MAX_VALUE
+        var bestAccuracy = accuracyEvaluator?.invoke(weights) ?: 0f
+        var bestWeights = weights
+        var bestEpoch = maxOf(1, startEpoch - 1)
 
         // Momentum velocity buffers
         val vW1 = Array(hiddenDim) { FloatArray(inputDim) }
@@ -404,10 +424,65 @@ class OnDeviceTrainableModel(
             val currentLoss = computeLoss(dataset)
             lossHistory.add(currentLoss)
 
+            val currentAcc = accuracyEvaluator?.invoke(weights) ?: 0f
+            var isBest = false
+
+            if (accuracyEvaluator != null) {
+                if (currentAcc > bestAccuracy || (kotlin.math.abs(currentAcc - bestAccuracy) < 0.001f && currentLoss < bestLoss)) {
+                    bestAccuracy = currentAcc
+                    bestLoss = currentLoss
+                    bestEpoch = epoch
+                    bestWeights = weights
+                    isBest = true
+                }
+            } else {
+                if (currentLoss < bestLoss) {
+                    bestLoss = currentLoss
+                    bestEpoch = epoch
+                    bestWeights = weights
+                    isBest = true
+                }
+            }
+
+            var isDropDetected = false
+            // Check for accuracy drop or significant loss spike
+            if (accuracyEvaluator != null && bestAccuracy > 0.10f && (currentAcc < bestAccuracy - accuracyDropThreshold)) {
+                isDropDetected = true
+            } else if (epoch > startEpoch + 2 && currentLoss > bestLoss * 1.35f) {
+                isDropDetected = true
+            }
+
+            if (isDropDetected) {
+                onAccuracyDrop?.invoke(epoch, currentLoss, currentAcc, bestEpoch, bestLoss, bestAccuracy, bestWeights)
+                if (autoRevertOnDrop) {
+                    // Auto-revert weights to the best state
+                    for (i in 0 until hiddenDim) {
+                        for (j in 0 until inputDim) currentW1[i][j] = bestWeights.w1[i][j]
+                        currentB1[i] = bestWeights.b1[i]
+                    }
+                    for (k in 0 until outputDim) {
+                        for (i in 0 until hiddenDim) currentW2[k][i] = bestWeights.w2[k][i]
+                        currentB2[k] = bestWeights.b2[k]
+                    }
+                    weights = bestWeights
+                }
+            }
+
             onProgress(TrainingProgress(epoch, epochs, currentLoss, epoch == epochs))
 
-            if (epoch % checkpointInterval == 0 || epoch == epochs) {
-                onCheckpoint?.invoke(epoch, epochs, currentLoss, weights, lossHistory.toList())
+            val isPeriodic = (epoch % checkpointInterval == 0 || epoch == epochs)
+            if (isPeriodic || isDropDetected) {
+                if (isPeriodic) {
+                    onCheckpoint?.invoke(epoch, epochs, currentLoss, weights, lossHistory.toList())
+                }
+                onCheckpointExtended?.invoke(epoch, epochs, currentLoss, currentAcc, weights, lossHistory.toList(), isBest, isDropDetected)
+            }
+
+            if (thermalPacingDelayMs > 0) {
+                delay(thermalPacingDelayMs)
+                onThermalPacedYield?.invoke(thermalPacingDelayMs)
+            } else {
+                yield()
             }
         }
 

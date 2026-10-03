@@ -30,18 +30,26 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeviceHub
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.ModelTraining
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -51,6 +59,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -91,6 +100,9 @@ import com.example.dle_prototype.data.ml.OnDeviceTrainableModel
 import com.example.dle_prototype.data.ml.TrainingCheckpoint
 import com.example.dle_prototype.data.ml.TrainingProgress
 import com.example.dle_prototype.data.ml.TrainingSample
+import com.example.dle_prototype.ui.components.DiagnosticInteractiveMetricCard
+import com.example.dle_prototype.ui.components.DiagnosticMetricTooltipData
+import com.example.dle_prototype.ui.components.DiagnosticMetricTooltipDialog
 import com.example.dle_prototype.ui.components.TraitBar
 import com.example.dle_prototype.ui.theme.AmberAccent
 import com.example.dle_prototype.ui.theme.CyanAccent
@@ -103,6 +115,7 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.sqrt
 
@@ -138,6 +151,8 @@ fun DiagnosticsScreen(
     var isRunningCalibration by remember { mutableStateOf(false) }
     var calibrationProgress by remember { mutableStateOf<TrainingProgress?>(null) }
     var selectedTensorCellDetail by remember { mutableStateOf<String?>(null) }
+    var checkpointsList by remember { mutableStateOf<List<TrainingCheckpoint>>(emptyList()) }
+    var checkpointFeedback by remember { mutableStateOf<String?>(null) }
 
     // Live Sandbox State
     var testLoginFreq by remember { mutableFloatStateOf(5f) }
@@ -231,6 +246,7 @@ fun DiagnosticsScreen(
             curve.add(lossVal)
         }
         lossHistory = curve
+        checkpointsList = dbHelper.getTrainingCheckpoints(username, 30)
     }
 
     LaunchedEffect(user?.username) {
@@ -291,8 +307,9 @@ fun DiagnosticsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            TabRow(
+            ScrollableTabRow(
                 selectedTabIndex = selectedTab,
+                edgePadding = 16.dp,
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
                 Tab(
@@ -314,6 +331,11 @@ fun DiagnosticsScreen(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
                     text = { Text("Simulator & Runtime") }
+                )
+                Tab(
+                    selected = selectedTab == 4,
+                    onClick = { selectedTab = 4 },
+                    text = { Text("Checkpoints & Revert (${checkpointsList.size})") }
                 )
             }
 
@@ -348,18 +370,26 @@ fun DiagnosticsScreen(
                                 epochs = 15,
                                 learningRate = 0.08f,
                                 checkpointInterval = 3,
-                                onCheckpoint = { ep, total, loss, w, hist ->
+                                onCheckpointExtended = { ep, total, loss, acc, w, hist, isBest, isDrop ->
+                                    val trigger = if (isDrop) "ACCURACY_DROP" else if (isBest) "BEST_ACCURACY" else "PERIODIC"
+                                    val name = if (isDrop) "Epoch $ep (Accuracy Drop)" else if (isBest) "Epoch $ep (Best ⭐)" else "Epoch $ep Periodic Save"
                                     dbHelper.saveTrainingCheckpoint(
                                         TrainingCheckpoint(
                                             username = username,
                                             sessionId = "calib_${System.currentTimeMillis()}",
+                                            checkpointName = name,
                                             currentEpoch = ep,
                                             targetEpochs = total,
                                             currentLoss = loss,
+                                            accuracyPct = acc,
                                             lossHistory = hist,
-                                            weights = w
+                                            weights = w,
+                                            isCompleted = (ep == total),
+                                            isBest = isBest,
+                                            triggerType = trigger
                                         )
                                     )
+                                    checkpointsList = dbHelper.getTrainingCheckpoints(username, 30)
                                 },
                                 onProgress = { prog ->
                                     calibrationProgress = prog
@@ -370,6 +400,7 @@ fun DiagnosticsScreen(
                             weights = res.weights
                             lossHistory = res.lossHistory
                             evaluateModel(res.weights)
+                            checkpointsList = dbHelper.getTrainingCheckpoints(username, 30)
                             isRunningCalibration = false
                         }
                     }
@@ -393,6 +424,51 @@ fun DiagnosticsScreen(
                     onQuizScoreChange = { testQuizScore = it },
                     onDifficultyChange = { testDifficulty = it },
                     onCategoryChange = { testCategory = it }
+                )
+                4 -> CheckpointsRevertTab(
+                    username = user?.username ?: "default_learner",
+                    checkpoints = checkpointsList,
+                    currentWeights = weights,
+                    currentAccuracy = overallAccuracyPct,
+                    feedbackMessage = checkpointFeedback,
+                    onDismissFeedback = { checkpointFeedback = null },
+                    onRevertToCheckpoint = { cp ->
+                        coroutineScope.launch {
+                            val uname = user?.username ?: "default_learner"
+                            val reverted = dbHelper.revertModelToCheckpoint(uname, cp.id)
+                            loadDiagnosticsData()
+                            checkpointFeedback = "Model reverted to ${cp.checkpointName} (Epoch ${cp.currentEpoch}, Loss: ${"%.4f".format(cp.currentLoss)})!"
+                        }
+                    },
+                    onDeleteCheckpoint = { cpId ->
+                        coroutineScope.launch {
+                            val uname = user?.username ?: "default_learner"
+                            dbHelper.deleteCheckpoint(cpId)
+                            checkpointsList = dbHelper.getTrainingCheckpoints(uname, 30)
+                            checkpointFeedback = "Checkpoint removed."
+                        }
+                    },
+                    onTakeSnapshot = { name ->
+                        coroutineScope.launch {
+                            val uname = user?.username ?: "default_learner"
+                            val w = weights ?: ModelWeights.defaultInit(5, 8, 4)
+                            val cp = TrainingCheckpoint(
+                                username = uname,
+                                sessionId = UUID.randomUUID().toString(),
+                                checkpointName = name,
+                                currentEpoch = w.trainedEpochs,
+                                targetEpochs = maxOf(15, w.trainedEpochs),
+                                currentLoss = w.finalLoss,
+                                accuracyPct = overallAccuracyPct,
+                                lossHistory = lossHistory,
+                                weights = w,
+                                triggerType = "MANUAL"
+                            )
+                            dbHelper.saveTrainingCheckpoint(cp)
+                            checkpointsList = dbHelper.getTrainingCheckpoints(uname, 30)
+                            checkpointFeedback = "Snapshot '$name' created successfully!"
+                        }
+                    }
                 )
             }
         }
@@ -735,18 +811,145 @@ fun BiasChip(name: String, value: Float) {
 }
 
 @Composable
-fun TensorMetricChip(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+fun TensorMetricChip(
+    label: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    var showTooltip by remember { mutableStateOf(false) }
+
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = color.copy(alpha = 0.12f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.3f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.35f)),
         modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { showTooltip = true }
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
-            Text(text = label, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = "Explain $label",
+                    tint = color.copy(alpha = 0.8f),
+                    modifier = Modifier.size(12.dp)
+                )
+            }
             Spacer(modifier = Modifier.height(2.dp))
-            Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = color)
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
         }
+    }
+
+    if (showTooltip) {
+        val (whatItRepresents, whyItMatters, target) = when (label) {
+            "Mean Weight" -> Triple(
+                "The arithmetic mean of all connection weights and biases across MLP layers (5 → 8 → 4).",
+                "Indicates if gradients are pulling parameter values systematically away from zero, which can cause activation saturation.",
+                "Target: Near 0.00 (-0.05 to +0.05) for symmetric distribution."
+            )
+            "Frobenius Norm" -> Triple(
+                "The square root of the sum of squared weights: ||W||_F = √(Σ wᵢⱼ²). Quantifies matrix magnitude.",
+                "Prevents exploding or vanishing gradient updates. A healthy norm ensures network stability during on-device training.",
+                "Target: 2.0 to 6.0 (prevents over-regularization or weight explosion)."
+            )
+            "Range" -> Triple(
+                "The minimum and maximum weight bounds [W_min, W_max] observed across the neural network.",
+                "Guarantees that float32 precision boundaries are preserved without numeric overflow or zero collapse in TFLite.",
+                "Target: Narrow range between -1.50 and +1.50."
+            )
+            else -> Triple(
+                "A key neural parameter metric extracted directly from the on-device weight tensors.",
+                "Directly affects inference confidence and personalized recommendation stability.",
+                "Target: Monitored within safe operational thresholds."
+            )
+        }
+
+        AlertDialog(
+            onDismissRequest = { showTooltip = false },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(color.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+                    }
+                    Column {
+                        Text(text = label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        Text(text = "Current Value: $value", fontSize = 11.sp, color = color, fontFamily = FontFamily.Monospace)
+                    }
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF0F172A),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("WHAT THIS REPRESENTS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CyanAccent, fontFamily = FontFamily.Monospace)
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(whatItRepresents, fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF0F172A),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E293B)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("WHY IT MATTERS FOR PERFORMANCE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AmberAccent, fontFamily = FontFamily.Monospace)
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(whyItMatters, fontSize = 12.sp, color = Color(0xFFE2E8F0))
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = EmeraldSuccess.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldSuccess.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text("OPTIMAL BENCHMARK", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EmeraldSuccess, fontFamily = FontFamily.Monospace)
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(target, fontSize = 12.sp, color = Color(0xFFF1F5F9))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showTooltip = false }) {
+                    Text("Got it")
+                }
+            }
+        )
     }
 }
 
@@ -1279,6 +1482,388 @@ fun SliderRow(
             onValueChange = onValueChange,
             valueRange = range,
             modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+// -------------------------------------------------------------
+// TAB 4: CHECKPOINTS & ROLLBACK MANAGER
+// -------------------------------------------------------------
+@Composable
+fun CheckpointsRevertTab(
+    username: String,
+    checkpoints: List<TrainingCheckpoint>,
+    currentWeights: ModelWeights?,
+    currentAccuracy: Float,
+    feedbackMessage: String?,
+    onDismissFeedback: () -> Unit,
+    onRevertToCheckpoint: (TrainingCheckpoint) -> Unit,
+    onDeleteCheckpoint: (Long) -> Unit,
+    onTakeSnapshot: (String) -> Unit
+) {
+    var showSnapshotDialog by remember { mutableStateOf(false) }
+    var snapshotNameInput by remember { mutableStateOf("") }
+    val dateFormat = remember { SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()) }
+
+    val bestCheckpoint = remember(checkpoints) {
+        checkpoints.firstOrNull { it.isBest } ?: checkpoints.minByOrNull { it.currentLoss }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Feedback message banner
+        feedbackMessage?.let { msg ->
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("diag_checkpoint_feedback"),
+                shape = RoundedCornerShape(12.dp),
+                color = EmeraldSuccess.copy(alpha = 0.15f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldSuccess)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = EmeraldSuccess, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = msg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                    IconButton(onClick = onDismissFeedback, modifier = Modifier.size(24.dp)) {
+                        Text("✕", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // Active State Summary & Snapshot Control
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("diag_active_checkpoint_card"),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Active On-Device Model State",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Weights v${currentWeights?.version ?: 1} • ${currentWeights?.trainedEpochs ?: 0} trained epochs",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(EmeraldSuccess.copy(alpha = 0.15f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Acc: ${"%.1f".format(currentAccuracy)}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = EmeraldSuccess
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            snapshotNameInput = "Diagnostic Snapshot ${checkpoints.size + 1}"
+                            showSnapshotDialog = true
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("diag_take_snapshot_button")
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Snapshot State")
+                    }
+
+                    if (bestCheckpoint != null && (bestCheckpoint.accuracyPct > currentAccuracy + 2.0f || bestCheckpoint.currentLoss < (currentWeights?.finalLoss ?: 1f) * 0.85f)) {
+                        Button(
+                            onClick = { onRevertToCheckpoint(bestCheckpoint) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("diag_rollback_best_button"),
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = AmberAccent)
+                        ) {
+                            Icon(Icons.Default.Restore, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Revert to Best", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Checkpoint History Timeline
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("diag_checkpoint_history_card"),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 2.dp,
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Checkpoint History & Rollback",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = "${checkpoints.size} saved",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "If training accuracy drops due to overfitting or catastrophic forgetting, select any prior checkpoint below to immediately revert your neural network weights.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                if (checkpoints.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                            .padding(20.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No saved checkpoints yet. Checkpoints are automatically captured during training or via 'Snapshot State'.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        checkpoints.forEach { cp ->
+                            val isActive = currentWeights != null && (currentWeights.finalLoss == cp.currentLoss || currentWeights.trainedEpochs == cp.currentEpoch)
+                            val formattedDate = remember(cp.savedAt) { dateFormat.format(Date(cp.savedAt)) }
+
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("diag_cp_item_${cp.id}"),
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                border = if (isActive) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                                         else if (cp.isBest) androidx.compose.foundation.BorderStroke(1.dp, AmberAccent)
+                                         else null
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = cp.checkpointName,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            if (cp.isBest) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(AmberAccent.copy(alpha = 0.2f))
+                                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text("⭐ Best", style = MaterialTheme.typography.labelSmall, color = AmberAccent, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                            if (cp.triggerType == "ACCURACY_DROP") {
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(AmberAccent.copy(alpha = 0.2f))
+                                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text("⚠️ Drop", style = MaterialTheme.typography.labelSmall, color = AmberAccent, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                            if (isActive) {
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(EmeraldSuccess.copy(alpha = 0.2f))
+                                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text("ACTIVE", style = MaterialTheme.typography.labelSmall, color = EmeraldSuccess, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+
+                                        IconButton(
+                                            onClick = { onDeleteCheckpoint(cp.id) },
+                                            modifier = Modifier.size(24.dp).testTag("diag_delete_cp_${cp.id}")
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Delete,
+                                                contentDescription = "Delete Checkpoint",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Text(
+                                            text = "Loss: ${"%.4f".format(cp.currentLoss)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        if (cp.accuracyPct > 0f) {
+                                            Text(
+                                                text = "Acc: ${"%.1f".format(cp.accuracyPct)}%",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = EmeraldSuccess,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                        Text(
+                                            text = "Epoch ${cp.currentEpoch}/${cp.targetEpochs}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = formattedDate,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Button(
+                                        onClick = { onRevertToCheckpoint(cp) },
+                                        enabled = !isActive,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(36.dp)
+                                            .testTag("diag_revert_button_${cp.id}"),
+                                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                            containerColor = if (cp.isBest) AmberAccent else MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = if (cp.isBest) Color.Black else MaterialTheme.colorScheme.onPrimaryContainer
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isActive) "Current Active Model" else "Revert Model to this State",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showSnapshotDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showSnapshotDialog = false },
+            title = { Text("Snapshot Model Checkpoint") },
+            text = {
+                Column {
+                    Text(
+                        text = "Capture a permanent checkpoint of current on-device neural weights in SQLite:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = snapshotNameInput,
+                        onValueChange = { snapshotNameInput = it },
+                        label = { Text("Checkpoint Tag / Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("diag_snapshot_name_input")
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val name = snapshotNameInput.ifEmpty { "Diagnostic Snapshot" }
+                        onTakeSnapshot(name)
+                        showSnapshotDialog = false
+                    },
+                    modifier = Modifier.testTag("diag_confirm_snapshot_button")
+                ) {
+                    Text("Save Snapshot")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showSnapshotDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }

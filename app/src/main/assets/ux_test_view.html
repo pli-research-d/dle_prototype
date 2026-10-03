@@ -752,6 +752,38 @@
               </div>
             </div>
 
+            <!-- Model Training Progress Curve Card (Recharts) -->
+            <div class="m3-card" id="dash-recharts-curve-card">
+              <div class="m3-card-header">
+                <div>
+                  <span class="card-title">Training Progress (Recharts)</span>
+                  <div style="font-size:10px; color:var(--text-muted);">Loss & Accuracy Convergence over Epochs</div>
+                </div>
+                <div class="filter-pills" style="display:flex; gap:3px;">
+                  <button class="filter-btn active" id="btn-curve-dual" onclick="setDashboardCurveFilter('all')">Dual</button>
+                  <button class="filter-btn" id="btn-curve-loss" onclick="setDashboardCurveFilter('loss')">Loss</button>
+                  <button class="filter-btn" id="btn-curve-acc" onclick="setDashboardCurveFilter('acc')">Accuracy</button>
+                </div>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:11px;">
+                <span style="color:var(--primary-light);">● Loss: <strong>0.0380 MSE</strong></span>
+                <span style="color:var(--emerald);">● Acc: <strong>89.5%</strong></span>
+                <span style="color:var(--amber);">● Checkpoints: <strong>6 Saved</strong></span>
+              </div>
+
+              <div id="dash-curve-svg-container" style="width:100%; height:160px;">
+                <!-- Dynamically rendered curve -->
+              </div>
+
+              <div style="display:flex; gap:6px; overflow-x:auto; margin-top:8px; padding-top:4px;">
+                <span style="font-size:9px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-muted); flex-shrink:0;">Ep 1: Init 0.218L</span>
+                <span style="font-size:9px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-muted); flex-shrink:0;">Ep 3: Checkpoint (70%)</span>
+                <span style="font-size:9px; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.4); padding:2px 6px; border-radius:4px; color:var(--amber); font-weight:700; flex-shrink:0;">Ep 6: ⭐ Best 87.5%</span>
+                <span style="font-size:9px; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; color:var(--text-muted); flex-shrink:0;">Ep 10: 0.038L / 89.5%</span>
+              </div>
+            </div>
+
             <!-- Adaptive Learning Suite 2x2 Grid -->
             <div>
               <div style="font-size:12px; font-weight:700; margin-bottom:8px; color:var(--text-muted); text-transform:uppercase;">Adaptive Learning Suite</div>
@@ -1355,10 +1387,135 @@
       }, 120);
     }
 
+    let dashCurveFilter = 'all';
+    const sampleTrainingProgressData = [
+      { epoch: 1, loss: 0.2180, valLoss: 0.2240, accuracy: 52.0 },
+      { epoch: 2, loss: 0.1740, valLoss: 0.1810, accuracy: 61.5 },
+      { epoch: 3, loss: 0.1320, valLoss: 0.1410, accuracy: 70.0 },
+      { epoch: 4, loss: 0.1040, valLoss: 0.1150, accuracy: 76.5 },
+      { epoch: 5, loss: 0.0820, valLoss: 0.0940, accuracy: 82.0 },
+      { epoch: 6, loss: 0.0650, valLoss: 0.0780, accuracy: 87.5 },
+      { epoch: 7, loss: 0.0540, valLoss: 0.0690, accuracy: 88.0 },
+      { epoch: 8, loss: 0.0460, valLoss: 0.0630, accuracy: 88.5 },
+      { epoch: 9, loss: 0.0410, valLoss: 0.0590, accuracy: 89.0 },
+      { epoch: 10, loss: 0.0380, valLoss: 0.0580, accuracy: 89.5 }
+    ];
+
+    function setDashboardCurveFilter(filter) {
+      dashCurveFilter = filter;
+      document.querySelectorAll('#dash-recharts-curve-card .filter-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById(`btn-curve-${filter === 'all' ? 'dual' : filter}`);
+      if (activeBtn) activeBtn.classList.add('active');
+      renderDashboardCurve();
+    }
+
+    function renderDashboardCurve() {
+      const container = document.getElementById('dash-curve-svg-container');
+      if (!container) return;
+
+      const data = sampleTrainingProgressData;
+      const w = 320;
+      const h = 160;
+      const padL = 30;
+      const padR = 30;
+      const padT = 12;
+      const padB = 22;
+      const chartW = w - padL - padR;
+      const chartH = h - padT - padB;
+
+      const maxLoss = 0.25;
+      const minEpoch = 1;
+      const maxEpoch = 10;
+
+      function getX(ep) {
+        return padL + ((ep - minEpoch) / (maxEpoch - minEpoch)) * chartW;
+      }
+      function getYLoss(l) {
+        return padT + chartH - (l / maxLoss) * chartH;
+      }
+      function getYAcc(a) {
+        return padT + chartH - (a / 100) * chartH;
+      }
+
+      let lossD = "";
+      let valLossD = "";
+      let accD = "";
+      let accAreaD = "";
+
+      data.forEach((pt, i) => {
+        const x = getX(pt.epoch);
+        const yL = getYLoss(pt.loss);
+        const yVL = getYLoss(pt.valLoss);
+        const yA = getYAcc(pt.accuracy);
+
+        if (i === 0) {
+          lossD += `M ${x} ${yL}`;
+          valLossD += `M ${x} ${yVL}`;
+          accD += `M ${x} ${yA}`;
+          accAreaD += `M ${x} ${padT + chartH} L ${x} ${yA}`;
+        } else {
+          lossD += ` L ${x} ${yL}`;
+          valLossD += ` L ${x} ${yVL}`;
+          accD += ` L ${x} ${yA}`;
+          accAreaD += ` L ${x} ${yA}`;
+        }
+      });
+      accAreaD += ` L ${getX(maxEpoch)} ${padT + chartH} Z`;
+
+      const showLoss = dashCurveFilter === 'all' || dashCurveFilter === 'loss';
+      const showAcc = dashCurveFilter === 'all' || dashCurveFilter === 'acc';
+
+      container.innerHTML = `
+        <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:100%; overflow:visible;">
+          <defs>
+            <linearGradient id="dashAccGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stop-color="#10B981" stop-opacity="0.25"/>
+              <stop offset="95%" stop-color="#10B981" stop-opacity="0.0"/>
+            </linearGradient>
+          </defs>
+
+          <!-- Grid -->
+          <line x1="${padL}" y1="${padT}" x2="${w - padR}" y2="${padT}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3"/>
+          <line x1="${padL}" y1="${padT + chartH * 0.5}" x2="${w - padR}" y2="${padT + chartH * 0.5}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="3 3"/>
+          <line x1="${padL}" y1="${padT + chartH}" x2="${w - padR}" y2="${padT + chartH}" stroke="rgba(255,255,255,0.12)"/>
+
+          <!-- Axis Labels -->
+          <text x="${padL - 4}" y="${padT + 4}" fill="#818CF8" font-size="8" text-anchor="end">0.25</text>
+          <text x="${padL - 4}" y="${padT + chartH}" fill="#818CF8" font-size="8" text-anchor="end">0.00</text>
+          <text x="${w - padR + 4}" y="${padT + 4}" fill="#10B981" font-size="8" text-anchor="start">100%</text>
+          <text x="${w - padR + 4}" y="${padT + chartH}" fill="#10B981" font-size="8" text-anchor="start">0%</text>
+
+          <text x="${padL}" y="${h - 6}" fill="#94A3B8" font-size="8" text-anchor="middle">Ep 1</text>
+          <text x="${w - padR}" y="${h - 6}" fill="#94A3B8" font-size="8" text-anchor="middle">Ep 10</text>
+
+          ${showAcc ? `
+            <path d="${accAreaD}" fill="url(#dashAccGrad)"/>
+            <path d="${accD}" fill="none" stroke="#10B981" stroke-width="2.2"/>
+          ` : ''}
+
+          ${showLoss ? `
+            <path d="${valLossD}" fill="none" stroke="#F59E0B" stroke-width="1.6" stroke-dasharray="3 3"/>
+            <path d="${lossD}" fill="none" stroke="#818CF8" stroke-width="2.6"/>
+          ` : ''}
+
+          ${data.map(d => {
+            const x = getX(d.epoch);
+            const yL = getYLoss(d.loss);
+            const yA = getYAcc(d.accuracy);
+            return `
+              ${showLoss ? `<circle cx="${x}" cy="${yL}" r="2.5" fill="#6366F1"/>` : ''}
+              ${showAcc ? `<circle cx="${x}" cy="${yA}" r="2.5" fill="#10B981"/>` : ''}
+            `;
+          }).join('')}
+        </svg>
+      `;
+    }
+
     // Initialize
     updateTelemetry();
     updateDeckCounts();
     initHeatmap();
+    renderDashboardCurve();
   </script>
 </body>
 </html>

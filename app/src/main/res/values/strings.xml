@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">DLE Prototype</string>
+    <string name="app_name">PLi</string>
 
     <!-- MainActivity -->
     <string name="login">Login</string>

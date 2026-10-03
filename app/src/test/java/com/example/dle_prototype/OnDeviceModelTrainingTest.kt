@@ -233,4 +233,164 @@ class OnDeviceModelTrainingTest {
             result.finalLoss <= lossAtCheckpoint
         )
     }
+
+    @Test
+    fun testAccuracyDropDetectionAndCallback() = runBlocking {
+        val dataset = listOf(
+            TrainingSample(
+                OnDeviceTrainableModel.normalize(floatArrayOf(2.0f, 5.0f, 40.0f, 1.0f, 1.0f)),
+                floatArrayOf(0.35f, 0.40f, 0.38f, 0.30f)
+            )
+        )
+        val model = OnDeviceTrainableModel(inputDim = 5, hiddenDim = 8, outputDim = 4)
+
+        var dropTriggered = false
+        var recordedDropEpoch = -1
+
+        // Synthetic accuracy evaluator that peaks at epoch 2 and drops at epoch 4
+        var epochCounter = 0
+        val evaluator: (ModelWeights) -> Float = { _ ->
+            epochCounter++
+            when (epochCounter) {
+                1 -> 70f
+                2 -> 92f // Peak
+                3 -> 90f
+                else -> 65f // Drop > 5%
+            }
+        }
+
+        model.train(
+            dataset = dataset,
+            epochs = 5,
+            accuracyEvaluator = evaluator,
+            accuracyDropThreshold = 5.0f,
+            autoRevertOnDrop = false,
+            onAccuracyDrop = { ep, currL, currAcc, bestEp, bestL, bestAcc, bestW ->
+                dropTriggered = true
+                recordedDropEpoch = ep
+            }
+        )
+
+        assertTrue("Accuracy drop should have been detected", dropTriggered)
+        assertTrue("Drop should have been detected after peak epoch", recordedDropEpoch >= 4)
+    }
+
+    @Test
+    fun testModelCheckpointReversionIntegrity() = runBlocking {
+        val dataset = listOf(
+            TrainingSample(
+                OnDeviceTrainableModel.normalize(floatArrayOf(4.0f, 12.0f, 65.0f, 2.0f, 2.0f)),
+                floatArrayOf(0.60f, 0.65f, 0.62f, 0.58f)
+            )
+        )
+        val model = OnDeviceTrainableModel(inputDim = 5, hiddenDim = 8, outputDim = 4)
+
+        var checkpointEpoch3Weights: ModelWeights? = null
+
+        // Train 3 epochs and checkpoint
+        model.train(
+            dataset = dataset,
+            epochs = 3,
+            onCheckpoint = { ep, total, loss, w, hist ->
+                if (ep == 3) {
+                    checkpointEpoch3Weights = w
+                }
+            }
+        )
+
+        assertNotNull("Checkpoint weights at epoch 3 should exist", checkpointEpoch3Weights)
+        val cp3 = checkpointEpoch3Weights!!
+
+        // Continue training to epoch 8 (weights will drift as gradient descent proceeds)
+        val trainedFurtherResult = model.train(
+            dataset = dataset,
+            epochs = 8,
+            startEpoch = 4
+        )
+
+        // Verify weights drifted
+        var weightsChanged = false
+        for (i in 0 until 8) {
+            for (j in 0 until 5) {
+                if (kotlin.math.abs(trainedFurtherResult.weights.w1[i][j] - cp3.w1[i][j]) > 0.0001f) {
+                    weightsChanged = true
+                }
+            }
+        }
+        assertTrue("Weights at epoch 8 should differ from epoch 3", weightsChanged)
+
+        // Now revert model to checkpoint epoch 3 weights
+        val revertedModel = OnDeviceTrainableModel(inputDim = 5, hiddenDim = 8, outputDim = 4, initialWeights = cp3)
+
+        // Verify exact tensor match with checkpointed weights
+        for (i in 0 until 8) {
+            for (j in 0 until 5) {
+                assertEquals(
+                    "Reverted weights W1[$i][$j] must exactly match checkpoint",
+                    cp3.w1[i][j],
+                    revertedModel.weights.w1[i][j],
+                    0.00001f
+                )
+            }
+        }
+        for (k in 0 until 4) {
+            for (i in 0 until 8) {
+                assertEquals(
+                    "Reverted weights W2[$k][$i] must exactly match checkpoint",
+                    cp3.w2[k][i],
+                    revertedModel.weights.w2[k][i],
+                    0.00001f
+                )
+            }
+        }
+    }
+
+    @Test
+    fun testBuildTrainingChartDataFromCheckpoints() {
+        val dummyWeights = ModelWeights(
+            w1 = Array(8) { FloatArray(5) { 0.1f } },
+            b1 = FloatArray(8) { 0.0f },
+            w2 = Array(4) { FloatArray(8) { 0.1f } },
+            b2 = FloatArray(4) { 0.0f },
+            version = 1,
+            trainedEpochs = 4
+        )
+        val cp = com.example.dle_prototype.data.ml.TrainingCheckpoint(
+            username = "testuser",
+            sessionId = "sess_chart_1",
+            checkpointName = "Midpoint",
+            currentEpoch = 4,
+            targetEpochs = 4,
+            currentLoss = 0.035f,
+            accuracyPct = 88.5f,
+            lossHistory = listOf(0.18f, 0.12f, 0.06f, 0.035f),
+            weights = dummyWeights,
+            isBest = true
+        )
+
+        val points = com.example.dle_prototype.ui.components.buildTrainingChartData(
+            checkpoints = listOf(cp),
+            userWeights = dummyWeights
+        )
+
+        assertEquals("Chart should have 4 points corresponding to epochs", 4, points.size)
+        assertEquals(1, points[0].epoch)
+        assertEquals(4, points[3].epoch)
+        assertEquals(0.18f, points[0].loss, 0.001f)
+        assertEquals(0.035f, points[3].loss, 0.001f)
+        assertTrue("Epoch 4 should have a milestone tag", points[3].tag != null)
+    }
+
+    @Test
+    fun testBuildTrainingChartDataDefaultFallback() {
+        val points = com.example.dle_prototype.ui.components.buildTrainingChartData(
+            checkpoints = emptyList(),
+            userWeights = null
+        )
+
+        assertTrue("Default fallback chart points should not be empty", points.isNotEmpty())
+        assertEquals(1, points.first().epoch)
+        assertEquals(10, points.last().epoch)
+        assertTrue("Final loss should be lower than initial loss in baseline", points.last().loss < points.first().loss)
+    }
 }

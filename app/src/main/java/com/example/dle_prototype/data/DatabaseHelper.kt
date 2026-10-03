@@ -1787,14 +1787,14 @@ class DatabaseHelper private constructor(context: Context) :
 
         if (count == 0) {
             val seeds = listOf(
-                arrayOf("sophia_ai", "Sophia Chen", "⚡", "14", "48", "230", "96.5", "Motivation", "Diamond"),
-                arrayOf("marcus_v", "Marcus Vance", "🔥", "12", "42", "198", "94.2", "Conscientious", "Diamond"),
-                arrayOf("elena_r", "Elena Rostova", "🧠", "9", "35", "165", "91.0", "Understanding", "Platinum"),
-                arrayOf("alex_k", "Alex Kim", "🚀", "7", "28", "134", "89.5", "Engagement", "Platinum"),
-                arrayOf("liam_oc", "Liam O'Connor", "🎯", "5", "22", "102", "87.0", "Conscientious", "Gold"),
-                arrayOf("aria_p", "Aria Patel", "✨", "4", "19", "88", "85.5", "Motivation", "Gold"),
-                arrayOf("kai_t", "Kai Takahashi", "💡", "3", "15", "71", "84.0", "Understanding", "Silver"),
-                arrayOf("zoe_m", "Zoe Miller", "🌟", "2", "11", "52", "82.0", "Engagement", "Silver")
+                arrayOf("sudo_sophia", "sudo Sophia", "⚡", "14", "48", "230", "96.5", "Motivation", "Diamond"),
+                arrayOf("sudo_vance", "sudo Vance", "🔥", "12", "42", "198", "94.2", "Conscientious", "Diamond"),
+                arrayOf("sudo_elena", "sudo Elena", "🧠", "9", "35", "165", "91.0", "Understanding", "Platinum"),
+                arrayOf("sudo_alex", "sudo Alex", "🚀", "7", "28", "134", "89.5", "Engagement", "Platinum"),
+                arrayOf("sudo_samurai", "sudo Samurai", "🎯", "5", "22", "102", "87.0", "Conscientious", "Gold"),
+                arrayOf("sudo_root", "sudo Root", "✨", "4", "19", "88", "85.5", "Motivation", "Gold"),
+                arrayOf("sudo_ninja", "sudo Ninja", "💡", "3", "15", "71", "84.0", "Understanding", "Silver"),
+                arrayOf("sudo_daemon", "sudo Daemon", "🌟", "2", "11", "52", "82.0", "Engagement", "Silver")
             )
             for (s in seeds) {
                 val cv = ContentValues().apply {
@@ -1808,7 +1808,7 @@ class DatabaseHelper private constructor(context: Context) :
                     put("dominant_trait", s[7])
                     put("tier", s[8])
                 }
-                db.insertWithOnConflict("community_learners", null, cv, SQLiteDatabase.CONFLICT_IGNORE)
+                db.insertWithOnConflict("community_learners", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
             }
         }
     }
@@ -1820,7 +1820,7 @@ class DatabaseHelper private constructor(context: Context) :
         cursor.close()
 
         if (count == 0) {
-            val defaults = listOf("elena_r", "alex_k", "kai_t")
+            val defaults = listOf("sudo_elena", "sudo_alex", "sudo_ninja")
             val now = System.currentTimeMillis()
             for (f in defaults) {
                 if (f != ownerUsername) {
@@ -1900,17 +1900,20 @@ class DatabaseHelper private constructor(context: Context) :
         )
         while (cursor.moveToNext()) {
             val u = cursor.getString(0)
-            candidates[u] = LeaderboardEntry(
+            val rawName = cursor.getString(1)
+            val sudoName = if (rawName.startsWith("sudo", ignoreCase = true)) rawName else "sudo $rawName"
+            val sudoUsername = if (u.startsWith("sudo", ignoreCase = true)) u else "sudo_${u.lowercase()}"
+            candidates[sudoUsername] = LeaderboardEntry(
                 rank = 0,
-                username = u,
-                displayName = cursor.getString(1),
+                username = sudoUsername,
+                displayName = sudoName,
                 avatarEmoji = cursor.getString(2),
                 dailyStreak = cursor.getInt(3),
                 totalQuizzes = cursor.getInt(4),
                 totalScore = cursor.getInt(5),
                 accuracyPercent = cursor.getFloat(6),
-                isCurrentUser = (u.equals(currentUsername, ignoreCase = true)),
-                isFriend = friends.contains(u),
+                isCurrentUser = (u.equals(currentUsername, ignoreCase = true) || sudoUsername.equals(currentUsername, ignoreCase = true)),
+                isFriend = friends.contains(u) || friends.contains(sudoUsername),
                 dominantTrait = cursor.getString(7),
                 tier = cursor.getString(8),
                 rankDelta = 0

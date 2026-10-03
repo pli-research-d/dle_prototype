@@ -34,9 +34,11 @@ import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.SportsKabaddi
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -100,6 +102,21 @@ fun FeedCardView(
     // 25s countdown timer bar
     val timerProgress = remember(card.id) { Animatable(1f) }
     var isUrgentTimer by remember(card.id) { mutableStateOf(false) }
+
+    // 15s countdown for EXPLAINER_15S
+    var explainerRemainingSeconds by remember(card.id) { mutableIntStateOf(15) }
+
+    LaunchedEffect(card.id, isSubmitted) {
+        if (!isSubmitted && card.type == FeedCardType.EXPLAINER_15S) {
+            explainerRemainingSeconds = 15
+            while (explainerRemainingSeconds > 0 && !isSubmitted) {
+                delay(1000L)
+                if (!isSubmitted) {
+                    explainerRemainingSeconds--
+                }
+            }
+        }
+    }
 
     LaunchedEffect(card.id, isSubmitted) {
         if (!isSubmitted && card.type != FeedCardType.EXPLAINER_15S && card.type != FeedCardType.REVIEW_CARD) {
@@ -387,7 +404,7 @@ fun FeedCardView(
                                 }
                             }
 
-                            // 3. 15-SEC MICRO EXPLAINER (No penalty)
+                            // 3. 15-SEC MICRO EXPLAINER (No penalty, 15s read with countdown slider at bottom)
                             FeedCardType.EXPLAINER_15S -> {
                                 Text(
                                     text = card.explanation,
@@ -395,6 +412,81 @@ fun FeedCardView(
                                     color = Color(0xFFE2E8F0),
                                     lineHeight = 19.sp
                                 )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // Countdown slider at the bottom (15s read)
+                                val explainerProgress = (explainerRemainingSeconds.toFloat() / 15f).coerceIn(0f, 1f)
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("explainer_15s_countdown_slider"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF0F172A),
+                                    border = BorderStroke(1.dp, Color(0xFF1E293B))
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (explainerRemainingSeconds <= 3) Icons.Default.HourglassTop else Icons.Default.Timer,
+                                                    contentDescription = "Read Countdown",
+                                                    tint = when {
+                                                        explainerRemainingSeconds <= 3 -> RoseAccent
+                                                        explainerRemainingSeconds <= 7 -> AmberAccent
+                                                        else -> CyanAccent
+                                                    },
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    text = if (explainerRemainingSeconds == 0) "Reading completed! (0s)" else "15s Read Countdown: ${explainerRemainingSeconds}s remaining",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = when {
+                                                        explainerRemainingSeconds <= 3 -> RoseAccent
+                                                        explainerRemainingSeconds <= 7 -> AmberAccent
+                                                        else -> Color(0xFFF1F5F9)
+                                                    },
+                                                    fontFamily = FontFamily.Monospace
+                                                )
+                                            }
+                                            Text(
+                                                text = "${(explainerProgress * 100).toInt()}%",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = CyanAccent,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
+
+                                        LinearProgressIndicator(
+                                            progress = { explainerProgress },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp)),
+                                            color = when {
+                                                explainerRemainingSeconds <= 3 -> RoseAccent
+                                                explainerRemainingSeconds <= 7 -> AmberAccent
+                                                else -> CyanAccent
+                                            },
+                                            trackColor = Color(0xFF1E293B)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
                                 if (!isSubmitted) {
                                     Button(
                                         onClick = {
@@ -404,7 +496,9 @@ fun FeedCardView(
                                             onAnswerSubmitted(true, xpGained, card.fuelReward)
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess),
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("explainer_understood_button")
                                     ) {
                                         Icon(Icons.Default.Lightbulb, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(6.dp))

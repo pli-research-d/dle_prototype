@@ -16,8 +16,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.dle_prototype.ui.navigation.AppRoute
 import com.example.dle_prototype.ui.navigation.BottomNavigationBar
+import com.example.dle_prototype.ui.components.ThemeCustomizerDialog
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -56,7 +58,9 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.ModelTraining
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RocketLaunch
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SportsKabaddi
@@ -133,6 +137,9 @@ import com.example.dle_prototype.ui.components.RewardsHubSheet
 import com.example.dle_prototype.ui.components.TodayFocusCard
 import com.example.dle_prototype.ui.components.TraitRadarCard
 import com.example.dle_prototype.ui.components.WeeklyRecapCard
+import com.example.dle_prototype.data.LearningModule
+import com.example.dle_prototype.data.ModuleStatus
+import com.example.dle_prototype.ui.components.MainDashboardView
 import com.example.dle_prototype.data.WellbeingSettings
 import com.example.dle_prototype.ui.theme.AmberAccent
 import com.example.dle_prototype.ui.theme.CyanAccent
@@ -177,6 +184,7 @@ fun DashboardScreen(
     onOpenFederated: () -> Unit = {},
     onOpenUxTest: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onThemeSettingsChanged: (com.example.dle_prototype.data.UserSettings) -> Unit = {},
     onLogout: () -> Unit,
     tabNavController: NavHostController = rememberNavController(),
     modifier: Modifier = Modifier
@@ -207,8 +215,14 @@ fun DashboardScreen(
     var leaderboardScope by remember { mutableStateOf(LeaderboardScope.GLOBAL) }
     var leaderboardSort by remember { mutableStateOf(LeaderboardSort.STREAK) }
     var dailyGoalProgress by remember { mutableStateOf(DailyGoalProgress()) }
+    var activeModules by remember { mutableStateOf<List<LearningModule>>(emptyList()) }
 
     var latencySnapshot by remember { mutableStateOf<InferenceLatencySnapshot?>(null) }
+    var digitalBadges by remember { mutableStateOf<List<com.example.dle_prototype.data.badges.DigitalBadge>>(emptyList()) }
+    var celebrationBadge by remember { mutableStateOf<com.example.dle_prototype.data.badges.DigitalBadge?>(null) }
+    var spacedRepetitionOverview by remember { mutableStateOf<com.example.dle_prototype.data.ml.SpacedRepetitionOverview?>(null) }
+    var peakAnalysis by remember { mutableStateOf<com.example.dle_prototype.data.ml.PeakLearningHoursAnalysis?>(null) }
+    var showExportDialog by remember { mutableStateOf(false) }
 
     suspend fun loadDashboardData() {
         isLoading = true
@@ -241,6 +255,16 @@ fun DashboardScreen(
 
         dailyGoalProgress = dbHelper.getDailyGoalProgress(user.username)
         leaderboardEntries = dbHelper.getLeaderboardEntries(user.username, leaderboardScope, leaderboardSort)
+        activeModules = dbHelper.getActiveLearningModules(user.username)
+
+        val badgeResult = dbHelper.checkAndAwardBadges(user.username)
+        digitalBadges = badgeResult.allBadges
+        if (badgeResult.newlyAwardedBadges.isNotEmpty() && celebrationBadge == null) {
+            celebrationBadge = badgeResult.newlyAwardedBadges.firstOrNull()
+        }
+
+        spacedRepetitionOverview = dbHelper.getSpacedRepetitionOverview(user.username)
+        peakAnalysis = dbHelper.getPeakLearningHoursAnalysis(user.username)
 
         latencySnapshot = InferenceLatencyTracker.profileInference(
             context = context,
@@ -351,7 +375,7 @@ fun DashboardScreen(
             }
 
             // ----------------------------------------------------
-            // 📚 TAB 1: PRACTICE (Quiz · Flashcards · Focus)
+            // 📚 TAB 1: PRACTICE (Dashboard · Quiz · Flashcards · Focus)
             // ----------------------------------------------------
             composable(DashboardTabRoutes.PRACTICE) {
                 LearnTabView(
@@ -359,8 +383,21 @@ fun DashboardScreen(
                     dbHelper = dbHelper,
                     recentAttempts = recentAttempts,
                     dueCardsCount = dueCardsCount,
+                    dailyStreak = dailyStreak,
+                    longestStreak = longestStreak,
+                    totalXp = quizPerformanceStats?.totalScore ?: (allHistoryAttempts.sumOf { it.score } * 10),
+                    totalQuizzes = quizPerformanceStats?.totalQuizzes ?: allHistoryAttempts.size,
+                    averageAccuracy = quizPerformanceStats?.averageAccuracyPercent ?: 85f,
+                    dailyGoalProgress = dailyGoalProgress,
+                    activeModules = activeModules,
                     onStartQuiz = onStartQuiz,
-                    onOpenFocus = onOpenFocus
+                    onOpenFocus = onOpenFocus,
+                    onUpdateTargetHours = { newHours ->
+                        coroutineScope.launch {
+                            dailyGoalProgress = dbHelper.setDailyTargetHours(user.username, newHours)
+                        }
+                    },
+                    spacedRepetitionOverview = spacedRepetitionOverview
                 )
             }
 
@@ -424,7 +461,9 @@ fun DashboardScreen(
                         }
                     },
                     onStartQuiz = { onStartQuiz("JavaScript", 3f) },
-                    focusSessions = focusSessions
+                    focusSessions = focusSessions,
+                    digitalBadges = digitalBadges,
+                    onOpenExport = { showExportDialog = true }
                 )
             }
 
@@ -439,6 +478,7 @@ fun DashboardScreen(
                     onSettingsUpdated = { updated ->
                         userSettings = updated
                         UserSettingsManager.saveSettings(context, user.username, updated)
+                        onThemeSettingsChanged(updated)
                     },
                     onOpenFocus = onOpenFocus,
                     onOpenTraining = onOpenTraining,
@@ -447,7 +487,8 @@ fun DashboardScreen(
                     onOpenUxTest = onOpenUxTest,
                     latencySnapshot = latencySnapshot,
                     onClearCache = { showClearConfirm = true },
-                    onLogout = onLogout
+                    onLogout = onLogout,
+                    onOpenExport = { showExportDialog = true }
                 )
             }
         }
@@ -478,6 +519,34 @@ fun DashboardScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    // Digital Achievement Badge Unlock Celebration Modal
+    celebrationBadge?.let { badge ->
+        com.example.dle_prototype.ui.components.BadgeCelebrationDialog(
+            badge = badge,
+            onDismiss = { celebrationBadge = null }
+        )
+    }
+
+    // Learning Data Archive Export Dialog (PDF & CSV)
+    if (showExportDialog) {
+        val exportBundle = com.example.dle_prototype.data.export.LearningExportBundle(
+            user = user,
+            dailyStreak = dailyStreak,
+            longestStreak = longestStreak,
+            dailyGoalProgress = dailyGoalProgress ?: com.example.dle_prototype.data.DailyGoalProgress(),
+            quizPerformanceStats = quizPerformanceStats ?: com.example.dle_prototype.data.QuizPerformanceStats(),
+            quizAttempts = allHistoryAttempts,
+            focusSessions = focusSessions,
+            peakLearningAnalysis = peakAnalysis,
+            digitalBadges = digitalBadges,
+            activeCategories = com.example.dle_prototype.data.QuestionsRepository.AVAILABLE_CATEGORIES.map { it.name }
+        )
+        com.example.dle_prototype.ui.components.ExportLearningDataDialog(
+            bundle = exportBundle,
+            onDismiss = { showExportDialog = false }
         )
     }
 }
@@ -769,10 +838,19 @@ fun LearnTabView(
     dbHelper: DatabaseHelper,
     recentAttempts: List<QuizAttempt>,
     dueCardsCount: Int,
+    dailyStreak: Int = 1,
+    longestStreak: Int = 1,
+    totalXp: Int = 350,
+    totalQuizzes: Int = 5,
+    averageAccuracy: Float = 85f,
+    dailyGoalProgress: DailyGoalProgress = DailyGoalProgress(),
+    activeModules: List<LearningModule> = emptyList(),
     onStartQuiz: (categoryName: String, categoryNumber: Float) -> Unit,
-    onOpenFocus: () -> Unit = {}
+    onOpenFocus: () -> Unit = {},
+    onUpdateTargetHours: (Float) -> Unit = {},
+    spacedRepetitionOverview: com.example.dle_prototype.data.ml.SpacedRepetitionOverview? = null
 ) {
-    var selectedSegment by remember { mutableIntStateOf(0) } // 0 = Quiz, 1 = Flashcards, 2 = Focus
+    var selectedSegment by remember { mutableIntStateOf(0) } // 0 = Dashboard, 1 = Quiz, 2 = Flashcards, 3 = Focus
 
     Column(
         modifier = Modifier
@@ -780,7 +858,7 @@ fun LearnTabView(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Top Segmented Control: [ Quiz ] | [ Flashcards ] | [ Focus ]
+        // Top Segmented Control: [ Dashboard ] | [ Quiz ] | [ Flashcards ] | [ Focus ]
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -800,8 +878,8 @@ fun LearnTabView(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Quiz",
-                        style = MaterialTheme.typography.labelLarge,
+                        text = "Dashboard",
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (selectedSegment == 0) FontWeight.Bold else FontWeight.Medium,
                         color = if (selectedSegment == 0) CyanAccent else Color(0xFF94A3B8)
                     )
@@ -816,15 +894,32 @@ fun LearnTabView(
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
+                    Text(
+                        text = "Quiz",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (selectedSegment == 1) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selectedSegment == 1) CyanAccent else Color(0xFF94A3B8)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1.1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (selectedSegment == 2) CyanAccent.copy(alpha = 0.2f) else Color.Transparent)
+                        .clickable { selectedSegment = 2 }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
                             text = "Flashcards",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = if (selectedSegment == 1) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selectedSegment == 1) CyanAccent else Color(0xFF94A3B8)
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (selectedSegment == 2) FontWeight.Bold else FontWeight.Medium,
+                            color = if (selectedSegment == 2) CyanAccent else Color(0xFF94A3B8)
                         )
                         if (dueCardsCount > 0) {
                             Surface(
@@ -833,10 +928,10 @@ fun LearnTabView(
                             ) {
                                 Text(
                                     text = "$dueCardsCount",
-                                    fontSize = 10.sp,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.Black,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                 )
                             }
                         }
@@ -845,25 +940,74 @@ fun LearnTabView(
 
                 Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(0.9f)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (selectedSegment == 2) CyanAccent.copy(alpha = 0.2f) else Color.Transparent)
-                        .clickable { selectedSegment = 2 }
+                        .background(if (selectedSegment == 3) CyanAccent.copy(alpha = 0.2f) else Color.Transparent)
+                        .clickable { selectedSegment = 3 }
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Focus",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = if (selectedSegment == 2) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selectedSegment == 2) CyanAccent else Color(0xFF94A3B8)
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (selectedSegment == 3) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selectedSegment == 3) CyanAccent else Color(0xFF94A3B8)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1.0f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (selectedSegment == 4) CyanAccent.copy(alpha = 0.2f) else Color.Transparent)
+                        .clickable { selectedSegment = 4 }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Summary",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (selectedSegment == 4) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selectedSegment == 4) CyanAccent else Color(0xFF94A3B8)
                     )
                 }
             }
         }
 
         when (selectedSegment) {
-            2 -> {
+            0 -> {
+                // Main Dashboard View: User Progress + Daily Streak + Active Learning Modules
+                MainDashboardView(
+                    user = user,
+                    dailyStreak = dailyStreak,
+                    longestStreak = longestStreak,
+                    totalXp = totalXp,
+                    totalQuizzes = totalQuizzes,
+                    averageAccuracy = averageAccuracy,
+                    dailyGoalProgress = dailyGoalProgress,
+                    activeModules = activeModules,
+                    recentAttempts = recentAttempts,
+                    onStartModule = { catName, catNum ->
+                        onStartQuiz(catName, catNum)
+                    },
+                    onStartPractice = { selectedSegment = 1 },
+                    onOpenFocus = onOpenFocus,
+                    onUpdateTargetHours = onUpdateTargetHours,
+                    onOpenSummarizer = { selectedSegment = 4 },
+                    spacedRepetitionOverview = spacedRepetitionOverview
+                )
+            }
+
+            4 -> {
+                // AI Summarizer Powered by On-Device TFLite with Automated MCQ Generator
+                AiSummarizerScreen(
+                    username = user.username,
+                    dbHelper = dbHelper,
+                    onBack = { selectedSegment = 0 }
+                )
+            }
+
+            3 -> {
                 // Focus Pomodoro Mode
                 FocusSessionScreen(
                     user = user,
@@ -871,7 +1015,8 @@ fun LearnTabView(
                     onBack = { selectedSegment = 0 }
                 )
             }
-            0 -> {
+
+            1 -> {
                 // [ Quiz ] Category picker grid of 6 with last score
                 Text(
                     text = "SELECT DOMAIN FOR DYNAMIC QUIZ",
@@ -944,7 +1089,7 @@ fun LearnTabView(
                 }
             }
 
-            1 -> {
+            2 -> {
                 // [ Flashcards ] Embedded Leitner Review
                 EmbeddedFlashcardReview(
                     username = user.username,
@@ -1220,7 +1365,9 @@ fun ProgressTabView(
     onToggleFriend: (String) -> Unit,
     onAddFriendByName: (String) -> Unit,
     onStartQuiz: () -> Unit,
-    focusSessions: List<StudySessionRecord>
+    focusSessions: List<StudySessionRecord>,
+    digitalBadges: List<com.example.dle_prototype.data.badges.DigitalBadge> = emptyList(),
+    onOpenExport: (() -> Unit)? = null
 ) {
     var selectedSegment by remember { mutableIntStateOf(0) } // 0=Overview, 1=History, 2=Achievements, 3=Leaderboard
 
@@ -1315,6 +1462,7 @@ fun ProgressTabView(
                 QuizHistorySection(
                     attempts = recentAttempts,
                     onStartNewQuiz = onStartQuiz,
+                    onExportClick = onOpenExport,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -1323,6 +1471,7 @@ fun ProgressTabView(
                 // [ Achievements ] Badge grid
                 AchievementsSection(
                     stats = quizPerformanceStats,
+                    digitalBadges = digitalBadges,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -1424,10 +1573,12 @@ fun ProfileTabView(
     onOpenUxTest: () -> Unit,
     latencySnapshot: InferenceLatencySnapshot?,
     onClearCache: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onOpenExport: (() -> Unit)? = null
 ) {
     var isDevModeExpanded by remember { mutableStateOf(false) }
     var showRewardsHub by remember { mutableStateOf(false) }
+    var showThemeCustomizer by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -1502,6 +1653,101 @@ fun ProfileTabView(
                     }
                 }
                 Text("Open →", color = Color(0xFFC084FC), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // 🎨 Themes & Custom Colors Card
+        val activeThemeName = com.example.dle_prototype.data.UserSettingsManager.PREDEFINED_THEMES.find { it.id == userSettings.themePresetId }?.name ?: "Custom Palette"
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF0F172A),
+            border = BorderStroke(1.dp, CyanAccent.copy(alpha = 0.5f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showThemeCustomizer = true }
+                .testTag("open_theme_customizer_button")
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(CyanAccent.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Palette,
+                            contentDescription = null,
+                            tint = CyanAccent,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                "Themes & Custom Colors 🎨",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = Color.White
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(CyanAccent.copy(alpha = 0.2f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    activeThemeName,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyanAccent
+                                )
+                            }
+                        }
+                        Text(
+                            "Customize background, foreground, accent, button & clicked colors",
+                            fontSize = 11.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Swatch indicators
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val bgCol = com.example.dle_prototype.data.UserSettingsManager.parseHexColor(userSettings.backgroundColorHex)
+                            val fgCol = com.example.dle_prototype.data.UserSettingsManager.parseHexColor(userSettings.foregroundColorHex)
+                            val accCol = com.example.dle_prototype.data.UserSettingsManager.parseHexColor(userSettings.accentColorHex)
+                            val btnCol = com.example.dle_prototype.data.UserSettingsManager.parseHexColor(userSettings.buttonColorHex)
+                            val btnClickedCol = com.example.dle_prototype.data.UserSettingsManager.parseHexColor(userSettings.buttonClickedColorHex)
+                            listOf(bgCol, fgCol, accCol, btnCol, btnClickedCol).forEach { c ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .clip(CircleShape)
+                                        .background(c)
+                                        .border(1.dp, Color(0xFF475569), CircleShape)
+                                )
+                            }
+                            Text("WCAG Contrast Protected", fontSize = 10.sp, color = Color(0xFFCBD5E1))
+                        }
+                    }
+                }
+                Text("Edit →", color = CyanAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -1654,6 +1900,40 @@ fun ProfileTabView(
                             }
                         }
                         Text("Launch →", color = CyanAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Export Learning Archive Shortcut
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF090E1A),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenExport?.invoke() }
+                        .padding(12.dp)
+                        .testTag("export_data_tool_card")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(EmeraldSuccess.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.SaveAlt, contentDescription = null, tint = EmeraldSuccess, modifier = Modifier.size(20.dp))
+                            }
+                            Column {
+                                Text("Export Learning Archive", fontWeight = FontWeight.Bold, color = Color(0xFFF8FAFC))
+                                Text("Archive daily summaries & quiz history as PDF or CSV", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                            }
+                        }
+                        Text("Export →", color = EmeraldSuccess, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1826,6 +2106,17 @@ fun ProfileTabView(
                 username = user.username,
                 dbHelper = dbHelper,
                 onDismiss = { showRewardsHub = false }
+            )
+        }
+
+        if (showThemeCustomizer) {
+            ThemeCustomizerDialog(
+                initialSettings = userSettings,
+                onDismiss = { showThemeCustomizer = false },
+                onSaveTheme = { updatedSettings ->
+                    showThemeCustomizer = false
+                    onSettingsUpdated(updatedSettings)
+                }
             )
         }
 

@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,6 +35,8 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +60,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.dle_prototype.data.QuizPerformanceStats
+import com.example.dle_prototype.data.badges.BadgeCategory
+import com.example.dle_prototype.data.badges.DigitalBadge
 import com.example.dle_prototype.ui.theme.AmberAccent
 import com.example.dle_prototype.ui.theme.CyanAccent
 import com.example.dle_prototype.ui.theme.EmeraldSuccess
@@ -160,11 +166,409 @@ fun buildAchievementsList(stats: QuizPerformanceStats): List<AchievementBadge> {
 }
 
 /**
- * Dedicated Grid Section displaying user achievements and badges based on
- * streak count and total quiz performance.
+ * Dedicated Grid Section displaying user achievements and digital badges based on
+ * learning streak milestones, high-volume study sessions, and mastery performance.
  */
 @Composable
 fun AchievementsSection(
+    stats: QuizPerformanceStats? = null,
+    digitalBadges: List<DigitalBadge> = emptyList(),
+    modifier: Modifier = Modifier
+) {
+    if (digitalBadges.isNotEmpty()) {
+        DigitalBadgesSectionView(
+            badges = digitalBadges,
+            modifier = modifier
+        )
+    } else {
+        LegacyAchievementsView(
+            stats = stats ?: QuizPerformanceStats(),
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun DigitalBadgesSectionView(
+    badges: List<DigitalBadge>,
+    modifier: Modifier = Modifier
+) {
+    var selectedCategory by remember { mutableStateOf<BadgeCategory?>(null) }
+    var selectedBadge by remember { mutableStateOf<DigitalBadge?>(null) }
+
+    val filteredBadges = remember(badges, selectedCategory) {
+        if (selectedCategory == null) badges else badges.filter { it.category == selectedCategory }
+    }
+
+    val unlockedCount = badges.count { it.isUnlocked }
+    val totalXpEarned = badges.filter { it.isUnlocked }.sumOf { it.xpReward }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("digital_badges_section"),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Summary Header Card
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = Color(0xFF0F172A),
+            border = BorderStroke(1.dp, CyanAccent.copy(alpha = 0.35f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(AmberAccent.copy(alpha = 0.25f), Color(0xFFFFD700).copy(alpha = 0.35f))
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.EmojiEvents,
+                            contentDescription = "Achievements",
+                            tint = Color(0xFFFFD700),
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "Digital Achievements",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFF8FAFC)
+                        )
+                        Text(
+                            text = "$unlockedCount of ${badges.size} Badges · +$totalXpEarned XP Earned",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = EmeraldSuccess.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, EmeraldSuccess.copy(alpha = 0.4f))
+                ) {
+                    Text(
+                        text = "${((unlockedCount.toFloat() / badges.size.toFloat()) * 100).toInt()}%",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = EmeraldSuccess,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
+
+        // Category Filter Chips
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = selectedCategory == null,
+                onClick = { selectedCategory = null },
+                label = { Text("All (${badges.size})", fontSize = 11.sp) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = CyanAccent,
+                    selectedLabelColor = Color(0xFF0F172A),
+                    containerColor = Color(0xFF0B132B),
+                    labelColor = Color(0xFF94A3B8)
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = selectedCategory == null,
+                    borderColor = Color(0xFF1E293B),
+                    selectedBorderColor = CyanAccent
+                )
+            )
+
+            BadgeCategory.values().forEach { cat ->
+                val isSel = selectedCategory == cat
+                val catCount = badges.count { it.category == cat }
+                FilterChip(
+                    selected = isSel,
+                    onClick = { selectedCategory = cat },
+                    label = { Text("${cat.displayName} ($catCount)", fontSize = 11.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = CyanAccent,
+                        selectedLabelColor = Color(0xFF0F172A),
+                        containerColor = Color(0xFF0B132B),
+                        labelColor = Color(0xFF94A3B8)
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = isSel,
+                        borderColor = Color(0xFF1E293B),
+                        selectedBorderColor = CyanAccent
+                    )
+                )
+            }
+        }
+
+        // 2-Column Grid of Digital Badges
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            filteredBadges.chunked(2).forEach { rowBadges ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    rowBadges.forEach { badge ->
+                        DigitalBadgeItemCard(
+                            badge = badge,
+                            onClick = { selectedBadge = badge },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (rowBadges.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+
+    // Detail Dialog for Digital Badge
+    selectedBadge?.let { badge ->
+        val tierColor = badge.tier.primaryColor
+        AlertDialog(
+            onDismissRequest = { selectedBadge = null },
+            modifier = Modifier.testTag("digital_badge_details_dialog"),
+            shape = RoundedCornerShape(20.dp),
+            containerColor = Color(0xFF0F172A),
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = tierColor.copy(alpha = 0.2f),
+                        border = BorderStroke(1.5.dp, tierColor),
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(text = badge.iconEmoji, fontSize = 24.sp)
+                        }
+                    }
+                    Column {
+                        Text(
+                            text = badge.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = if (badge.isUnlocked) "UNLOCKED 🏆" else "IN PROGRESS 🔒",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (badge.isUnlocked) EmeraldSuccess else AmberAccent
+                        )
+                    }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = badge.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFFCBD5E1)
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF131D31),
+                        border = BorderStroke(1.dp, Color(0xFF1E2E4A)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Tier & Rarity", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                                Text(
+                                    "${badge.tier.label} · ${badge.rarityText}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = tierColor
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Reward", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                                Text("+${badge.xpReward} XP", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AmberAccent)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Progress", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                                Text(badge.progressLabel, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tierColor)
+                            }
+                            LinearProgressIndicator(
+                                progress = { badge.progressFraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = tierColor,
+                                trackColor = Color(0xFF1E293B)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { selectedBadge = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyanAccent)
+                ) {
+                    Text("Close", color = Color(0xFF0F172A), fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun DigitalBadgeItemCard(
+    badge: DigitalBadge,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val tierColor = badge.tier.primaryColor
+    val borderColor = if (badge.isUnlocked) tierColor.copy(alpha = 0.6f) else Color(0xFF1E293B)
+    val cardBackground = if (badge.isUnlocked) Color(0xFF0F172A) else Color(0xFF0B1120)
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = cardBackground,
+        border = BorderStroke(1.dp, borderColor),
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .testTag("digital_badge_${badge.id}")
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (badge.isUnlocked) tierColor.copy(alpha = 0.2f) else Color(0xFF1E293B),
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(text = badge.iconEmoji, fontSize = 20.sp)
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (badge.isUnlocked) EmeraldSuccess.copy(alpha = 0.15f) else Color(0xFF1E293B),
+                    border = BorderStroke(
+                        0.5.dp,
+                        if (badge.isUnlocked) EmeraldSuccess.copy(alpha = 0.4f) else Color(0xFF334155)
+                    )
+                ) {
+                    Text(
+                        text = if (badge.isUnlocked) "UNLOCKED" else "LOCKED",
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (badge.isUnlocked) EmeraldSuccess else Color(0xFF94A3B8),
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Column {
+                Text(
+                    text = badge.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (badge.isUnlocked) Color(0xFFF1F5F9) else Color(0xFF94A3B8),
+                    maxLines = 1
+                )
+                Text(
+                    text = badge.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 10.sp,
+                    lineHeight = 13.sp,
+                    color = Color(0xFF64748B),
+                    maxLines = 2
+                )
+            }
+
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = badge.progressLabel,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (badge.isUnlocked) tierColor else Color(0xFF64748B)
+                    )
+                    Text(
+                        text = "+${badge.xpReward} XP",
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        color = AmberAccent
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = { badge.progressFraction },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = if (badge.isUnlocked) tierColor else Color(0xFF475569),
+                    trackColor = Color(0xFF1E293B)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegacyAchievementsView(
     stats: QuizPerformanceStats,
     modifier: Modifier = Modifier
 ) {

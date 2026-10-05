@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -63,7 +64,8 @@ import java.util.Locale
 fun QuizHistorySection(
     attempts: List<QuizAttempt>,
     onStartNewQuiz: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onExportClick: (() -> Unit)? = null
 ) {
     var selectedCategoryFilter by remember { mutableStateOf("All") }
 
@@ -164,6 +166,51 @@ fun QuizHistorySection(
                         fontWeight = FontWeight.ExtraBold,
                         color = AmberAccent
                     )
+                }
+            }
+        }
+
+        // Section Title & Export Action Bar
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "QUIZ ATTEMPTS (${filteredAttempts.size})",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                color = Color(0xFF94A3B8)
+            )
+
+            if (onExportClick != null && attempts.isNotEmpty()) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onExportClick,
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, CyanAccent.copy(alpha = 0.5f)),
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                        containerColor = CyanAccent.copy(alpha = 0.1f),
+                        contentColor = CyanAccent
+                    ),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.testTag("btn_export_history")
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SaveAlt,
+                            contentDescription = "Export History",
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "Export (PDF/CSV)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

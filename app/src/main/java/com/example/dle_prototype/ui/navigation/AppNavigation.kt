@@ -9,11 +9,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.SportsKabaddi
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -80,7 +80,7 @@ sealed class AppRoute(
     data object Feed : AppRoute("feed", "Feed", Icons.Default.RocketLaunch, "nav_tab_Feed")
     data object Practice : AppRoute("practice", "Practice", Icons.Default.School, "nav_tab_Practice")
     data object Compete : AppRoute("compete", "Compete", Icons.Default.SportsKabaddi, "nav_tab_Compete")
-    data object Progress : AppRoute("progress", "Progress", Icons.Default.TrendingUp, "nav_tab_Progress")
+    data object Progress : AppRoute("progress", "Progress", Icons.AutoMirrored.Filled.TrendingUp, "nav_tab_Progress")
     data object Profile : AppRoute("profile", "Profile", Icons.Default.Person, "nav_tab_Profile")
 
     companion object {

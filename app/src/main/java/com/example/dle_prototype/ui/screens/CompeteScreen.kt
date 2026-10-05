@@ -114,12 +114,15 @@ fun CompeteScreen(
     var activeDuelResult by remember { mutableStateOf<DuelMatchRecord?>(null) }
     var showAddFriendDialog by remember { mutableStateOf(false) }
     var friendInput by remember { mutableStateOf("") }
-    var pinnedRival by remember { mutableStateOf("Sam 'Algorithm' Lee") }
+    var pinnedRival by remember { mutableStateOf("MartianTiger67") }
 
     suspend fun loadData() {
         gamification = dbHelper.getGamificationState(user.username)
         leagueList = dbHelper.getLeaderboardEntries(user.username, LeaderboardScope.GLOBAL)
         recentDuels = dbHelper.getRecentDuels(user.username)
+        if (pinnedRival.contains("sudo", ignoreCase = true) || pinnedRival in listOf("Elena Rostova", "sudo CyberNinja", "CyberNinja") || pinnedRival.isBlank()) {
+            pinnedRival = leagueList.firstOrNull { !it.isCurrentUser }?.displayName ?: "MartianTiger67"
+        }
     }
 
     LaunchedEffect(user.username) {
@@ -181,16 +184,22 @@ fun CompeteScreen(
                                 isFindingDuel = true
                                 delay(1600)
                                 isFindingDuel = false
+                                val opponent = leagueList.filter { !it.isCurrentUser }.randomOrNull()
+                                val oppName = opponent?.displayName ?: "MartianTiger67"
+                                val oppAvatar = opponent?.avatarEmoji ?: "🐯"
+                                val oppScore = (5..9).random()
+                                val userScore = (oppScore - 1..10).random().coerceAtLeast(6)
+                                val isWin = userScore >= oppScore
                                 val record = dbHelper.recordDuel(
                                     username = user.username,
-                                    opponentName = "Jordan Hayes",
-                                    opponentAvatar = "🚀",
-                                    category = "JavaScript",
-                                    userScore = 9,
-                                    opponentScore = 7,
-                                    isWin = true,
-                                    xp = 50,
-                                    fuel = 20
+                                    opponentName = oppName,
+                                    opponentAvatar = oppAvatar,
+                                    category = listOf("Kotlin", "Algorithms", "Android Compose", "Data Structures").random(),
+                                    userScore = userScore,
+                                    opponentScore = oppScore,
+                                    isWin = isWin,
+                                    xp = if (isWin) 50 else 20,
+                                    fuel = if (isWin) 20 else 5
                                 )
                                 activeDuelResult = record
                                 loadData()
@@ -199,12 +208,14 @@ fun CompeteScreen(
                     )
                     2 -> FriendsTabView(
                         user = user,
+                        leagueList = leagueList,
                         pinnedRival = pinnedRival,
                         onPinRival = { pinnedRival = it },
                         onAddFriendClick = { showAddFriendDialog = true }
                     )
                     3 -> SeasonTabView(
-                        gamification = gamification
+                        gamification = gamification,
+                        leagueList = leagueList
                     )
                 }
             }
@@ -490,12 +501,16 @@ private fun LeagueTabView(
                             Text(entry.avatarEmoji, fontSize = 16.sp)
                             Column {
                                 Text(
-                                    text = if (isUser) "${entry.displayName} (You)" else entry.displayName,
+                                    text = if (isUser) "You" else entry.displayName,
                                     fontWeight = if (isUser) FontWeight.Black else FontWeight.SemiBold,
                                     fontSize = 13.sp,
                                     color = if (isUser) CyanAccent else Color.White
                                 )
-                                Text("🔥 ${entry.dailyStreak} streak", fontSize = 10.sp, color = Color(0xFF94A3B8))
+                                Text(
+                                    text = if (isUser) "🔥 ${entry.dailyStreak} streak" else "🔥 ${entry.dailyStreak} streak · ${entry.dominantTrait}",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF94A3B8)
+                                )
                             }
                         }
                         Text(
@@ -594,7 +609,7 @@ private fun DuelsTabView(
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(d.opponentAvatar, fontSize = 20.sp)
                             Column {
-                                Text("vs ${d.opponentName}", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                                Text("You vs ${d.opponentName}", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
                                 Text("${d.category} · Score: ${d.userScore} - ${d.opponentScore}", fontSize = 11.sp, color = Color(0xFF94A3B8))
                             }
                         }
@@ -620,15 +635,17 @@ private fun DuelsTabView(
 @Composable
 private fun FriendsTabView(
     user: User,
+    leagueList: List<LeaderboardEntry> = emptyList(),
     pinnedRival: String,
     onPinRival: (String) -> Unit,
     onAddFriendClick: () -> Unit
 ) {
-    val friends = listOf(
-        Triple("Sam 'Algorithm' Lee", "⚡", 420),
-        Triple("Sarah Chen", "🦊", 380),
-        Triple("Alex Rivera", "🐬", 310)
-    )
+    val friendEntries = leagueList.filter { it.isFriend && !it.isCurrentUser }
+    val displayFriends = if (friendEntries.isNotEmpty()) {
+        friendEntries
+    } else {
+        leagueList.filter { !it.isCurrentUser }.take(4)
+    }
 
     Column(
         modifier = Modifier
@@ -656,8 +673,11 @@ private fun FriendsTabView(
         }
 
         // Friends list
-        friends.forEach { (name, emoji, weeklyXp) ->
-            val isRival = pinnedRival == name
+        displayFriends.forEach { peer ->
+            val isUser = peer.isCurrentUser || peer.username.equals(user.username, ignoreCase = true)
+            val displayName = if (isUser) "You" else peer.displayName
+            val isRival = pinnedRival == displayName
+            val weeklyXp = peer.totalScore
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = Color(0xFF0F172A),
@@ -670,14 +690,19 @@ private fun FriendsTabView(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(emoji, fontSize = 20.sp)
+                        Text(peer.avatarEmoji, fontSize = 20.sp)
                         Column {
-                            Text(name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
-                            Text("$weeklyXp weekly XP", fontSize = 11.sp, color = AmberAccent)
+                            Text(
+                                text = displayName,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = if (isUser) CyanAccent else Color.White
+                            )
+                            Text("$weeklyXp XP · 🔥 ${peer.dailyStreak}d streak · ${peer.dominantTrait}", fontSize = 11.sp, color = AmberAccent)
                         }
                     }
                     Button(
-                        onClick = { onPinRival(name) },
+                        onClick = { onPinRival(displayName) },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isRival) Color(0xFFA855F7) else Color(0xFF1E293B)
                         ),
@@ -719,7 +744,8 @@ private fun FriendsTabView(
 // -----------------------------------------------------------------------------
 @Composable
 private fun SeasonTabView(
-    gamification: UserGamificationState?
+    gamification: UserGamificationState?,
+    leagueList: List<LeaderboardEntry> = emptyList()
 ) {
     val currentXp = gamification?.totalXp ?: 340
     val tiers = (1..15).map { lvl ->
@@ -754,6 +780,99 @@ private fun SeasonTabView(
                 Text("Climb all 30 seasonal tiers before the window closes. Free track is unlocked for all learners.", fontSize = 12.sp, color = Color(0xFFCBD5E1))
                 Spacer(modifier = Modifier.height(4.dp))
                 Text("⏳ 14 Days Remaining", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = CyanAccent)
+            }
+        }
+
+        // Active Learner Season Card
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = Color(0xFF0F172A),
+            border = BorderStroke(1.dp, CyanAccent.copy(alpha = 0.35f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("🚀", fontSize = 22.sp)
+                    Column {
+                        Text("You", fontWeight = FontWeight.Black, fontSize = 14.sp, color = CyanAccent)
+                        Text("Season Level ${(currentXp / 100).coerceAtLeast(1)} · Active Competitor", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("$currentXp Season XP", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = AmberAccent)
+                    Text("Tier ${(currentXp / 100).coerceIn(1, 15)} Unlocked", fontSize = 10.sp, color = EmeraldSuccess)
+                }
+            }
+        }
+
+        // Season Standings (Top Learners)
+        Text("SEASON STANDINGS (TOP LEARNERS)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF94A3B8))
+
+        val topSeasonLearners = if (leagueList.isNotEmpty()) {
+            leagueList.take(5)
+        } else {
+            listOf(
+                LeaderboardEntry(rank = 1, username = "martiantiger67", displayName = "MartianTiger67", avatarEmoji = "🐯", totalScore = 1520, dailyStreak = 24),
+                LeaderboardEntry(rank = 2, username = "snowyowl3", displayName = "SnowyOwl3", avatarEmoji = "🦉", totalScore = 1380, dailyStreak = 21),
+                LeaderboardEntry(rank = 3, username = "cosmicfalcon42", displayName = "CosmicFalcon42", avatarEmoji = "🦅", totalScore = 1240, dailyStreak = 18),
+                LeaderboardEntry(rank = 4, username = "user", displayName = "You", avatarEmoji = "🚀", totalScore = currentXp, dailyStreak = 5, isCurrentUser = true),
+                LeaderboardEntry(rank = 5, username = "neonpanda88", displayName = "NeonPanda88", avatarEmoji = "🐼", totalScore = 980, dailyStreak = 14)
+            )
+        }
+
+        topSeasonLearners.forEachIndexed { idx, peer ->
+            val isUser = peer.isCurrentUser
+            val displayName = if (isUser) "You" else peer.displayName
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (isUser) CyanAccent.copy(alpha = 0.12f) else Color(0xFF0F172A),
+                border = BorderStroke(1.dp, if (isUser) CyanAccent else Color(0xFF1E293B)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "#${idx + 1}",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp,
+                            color = when (idx) {
+                                0 -> AmberAccent
+                                1 -> Color(0xFFCBD5E1)
+                                2 -> Color(0xFFD97706)
+                                else -> Color(0xFF64748B)
+                            },
+                            modifier = Modifier.width(24.dp)
+                        )
+                        Text(peer.avatarEmoji, fontSize = 16.sp)
+                        Column {
+                            Text(
+                                text = displayName,
+                                fontWeight = if (isUser) FontWeight.Black else FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = if (isUser) CyanAccent else Color.White
+                            )
+                            Text(
+                                text = if (isUser) "Season Level ${(currentXp / 100).coerceAtLeast(1)} · Active Competitor" else "Season Level ${(peer.totalScore / 100).coerceAtLeast(1)} · ${peer.dominantTrait}",
+                                fontSize = 10.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                    }
+                    Text(
+                        text = if (isUser) "$currentXp XP" else "${peer.totalScore} XP",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = AmberAccent
+                    )
+                }
             }
         }
 

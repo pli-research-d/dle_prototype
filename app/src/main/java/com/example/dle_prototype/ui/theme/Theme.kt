@@ -83,33 +83,54 @@ fun DLETheme(
         val fg = UserSettingsManager.parseHexColor(userSettings.foregroundColorHex, DarkSurface)
         val accent = UserSettingsManager.parseHexColor(userSettings.accentColorHex, CyanAccent)
         val btn = UserSettingsManager.parseHexColor(userSettings.buttonColorHex, IndigoPrimaryLight)
+        val btnClicked = UserSettingsManager.parseHexColor(userSettings.buttonClickedColorHex, Color(0xFF4338CA))
 
         val onBg = UserSettingsManager.getContrastingTextColor(bg)
         val onFg = UserSettingsManager.getContrastingTextColor(fg)
         val onAccent = UserSettingsManager.getContrastingTextColor(accent)
         val onBtn = UserSettingsManager.getContrastingTextColor(btn)
+        val isBgLight = onBg == Color(0xFF0F172A)
 
-        val scheme = darkColorScheme(
-            primary = accent,
-            onPrimary = onAccent,
-            primaryContainer = btn,
-            onPrimaryContainer = onBtn,
-            secondary = accent,
-            onSecondary = onAccent,
-            tertiary = AmberAccent,
-            background = bg,
-            onBackground = onBg,
-            surface = fg,
-            onSurface = onFg,
-            surfaceVariant = fg,
-            onSurfaceVariant = UserSettingsManager.getSecondaryContrastingTextColor(fg),
-            outline = if (onFg == Color.White) Color(0xFF334155) else Color(0xFFCBD5E1)
-        )
+        val scheme = if (isBgLight) {
+            lightColorScheme(
+                primary = accent,
+                onPrimary = onAccent,
+                primaryContainer = btn,
+                onPrimaryContainer = onBtn,
+                secondary = accent,
+                onSecondary = onAccent,
+                tertiary = AmberAccent,
+                background = bg,
+                onBackground = onBg,
+                surface = fg,
+                onSurface = onFg,
+                surfaceVariant = fg,
+                onSurfaceVariant = UserSettingsManager.getSecondaryContrastingTextColor(fg),
+                outline = Color(0xFF94A3B8)
+            )
+        } else {
+            darkColorScheme(
+                primary = accent,
+                onPrimary = onAccent,
+                primaryContainer = btn,
+                onPrimaryContainer = onBtn,
+                secondary = accent,
+                onSecondary = onAccent,
+                tertiary = AmberAccent,
+                background = bg,
+                onBackground = onBg,
+                surface = fg,
+                onSurface = onFg,
+                surfaceVariant = fg,
+                onSurfaceVariant = UserSettingsManager.getSecondaryContrastingTextColor(fg),
+                outline = if (onFg == Color.White) Color(0xFF334155) else Color(0xFFCBD5E1)
+            )
+        }
         val custom = CustomThemeColors(
             background = bg,
             foreground = fg,
             accent = accent,
-            buttonClicked = btn,
+            buttonClicked = btnClicked,
             onBackground = onBg,
             onForeground = onFg,
             onButton = onBtn

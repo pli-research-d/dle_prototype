@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -233,6 +234,124 @@ fun QuizScreen(
         isLoading = false
     }
 
+    val submitWithConfidence: (AnswerConfidence) -> Unit = { confidence ->
+        if (selectedAnswer != null && sessionQuestions.isNotEmpty() && currentIndex < sessionQuestions.size) {
+            val currentQ = sessionQuestions[currentIndex]
+            isAnswerSubmitted = true
+            lastSubmittedConfidence = confidence
+            val correct = selectedAnswer == currentQ.answer
+            val qDiff = QuestionsRepository.difficultyToFloat(currentQ.difficulty)
+            if (qDiff > maxDifficultyReached) maxDifficultyReached = qDiff
+
+            val timeTaken = (questionDurationSeconds - remainingSeconds).coerceIn(1, questionDurationSeconds)
+
+            when {
+                // 1. Certain and correct answers: rewarded with score, streak, and adaptive level promotion
+                confidence == AnswerConfidence.CERTAIN && correct -> {
+                    consecutiveErrors = 0
+                    lastAnswerWasCorrect = true
+                    score++
+                    streak++
+                    if (streak > highestStreak) highestStreak = streak
+                    savedToDeckMessage = false
+                }
+
+                // 2. Guessing and correct answer: reduces adaptive level, streak reset to consolidate fundamentals
+                confidence == AnswerConfidence.GUESSING && correct -> {
+                    consecutiveErrors = 0
+                    lastAnswerWasCorrect = true
+                    score++
+                    streak = 0
+                    savedToDeckMessage = false
+                }
+
+                // 3. Certain and incorrect: misconception penalty reduces adaptive level
+                confidence == AnswerConfidence.CERTAIN && !correct -> {
+                    consecutiveErrors++
+                    lastAnswerWasCorrect = false
+                    streak = 0
+                    savedToDeckMessage = true
+                    missedQuestionsList.add(currentQ)
+                    coroutineScope.launch {
+                        dbHelper.addMissedQuestionToFlashcard(user.username, currentQ)
+                    }
+                }
+
+                // 4. Guessing and incorrect: full penalty reduces adaptive level
+                else -> {
+                    consecutiveErrors++
+                    lastAnswerWasCorrect = false
+                    streak = 0
+                    savedToDeckMessage = true
+                    missedQuestionsList.add(currentQ)
+                    coroutineScope.launch {
+                        dbHelper.addMissedQuestionToFlashcard(user.username, currentQ)
+                    }
+                }
+            }
+
+            // Check daily goal achieved during session
+            if (!isDailyGoalAchieved && (answeredTodayBase + currentIndex + 1) >= dailyTarget) {
+                isDailyGoalAchieved = true
+            }
+
+            // Dynamic Adaptive Complexity Adjustment with confidence calibration
+            if (isDdaActive) {
+                val sessionAccuracy = score.toFloat() / (currentIndex + 1).toFloat()
+                val escalationThresh = adaptiveProfile?.escalationThreshold ?: 2
+                val adj = AdaptiveDifficultyEngine.computeDynamicAdjustment(
+                    currentComplexity = currentComplexity,
+                    currentTier = ddaTier,
+                    isCorrect = correct,
+                    confidence = confidence,
+                    secondsTaken = timeTaken,
+                    currentStreak = streak,
+                    consecutiveErrors = consecutiveErrors,
+                    sessionAccuracy = sessionAccuracy,
+                    escalationThreshold = escalationThresh
+                )
+                currentComplexity = adj.newComplexity
+                ddaTier = adj.newTier
+                ddaEventMessage = adj.message
+            }
+        }
+    }
+
+    val goToNextQuestion: () -> Unit = {
+        val isLastQuestion = currentIndex >= totalSessionQuestions - 1
+        if (isLastQuestion) {
+            coroutineScope.launch {
+                dbHelper.recordQuizResult(
+                    username = user.username,
+                    category = categoryName,
+                    categoryNumber = categoryNumber,
+                    score = score,
+                    totalQuestions = totalSessionQuestions,
+                    difficultyLevel = maxDifficultyReached
+                )
+                dbHelper.updateUserStreakOnQuizCompletion(user.username)
+                showResultDialog = true
+            }
+        } else {
+            currentIndex++
+            selectedAnswer = null
+            lastSubmittedConfidence = null
+            isAnswerSubmitted = false
+            isTimedOut = false
+            remainingSeconds = questionDurationSeconds
+            savedToDeckMessage = false
+            ddaEventMessage = null
+
+            // Pick next adaptive question if not yet populated
+            if (currentIndex >= sessionQuestions.size) {
+                val nextQ = pickNextQuestion(ddaTier)
+                if (nextQ != null) {
+                    sessionQuestions.add(nextQ)
+                }
+            }
+        }
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
@@ -341,6 +460,156 @@ fun QuizScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
+        },
+        bottomBar = {
+            if (!isLoading && sessionQuestions.isNotEmpty() && currentIndex < sessionQuestions.size) {
+                Surface(
+                    color = Color(0xFF0F172A),
+                    tonalElevation = 8.dp,
+                    border = BorderStroke(1.dp, Color(0xFF1E293B)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!isAnswerSubmitted) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (selectedAnswer == null) "Select an answer, then submit as Certain or Guessing:" else "✓ Response selected! Submit as Certain or Guessing:",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (selectedAnswer != null) CyanAccent else Color(0xFF94A3B8)
+                                )
+                                if (selectedAnswer != null) {
+                                    Text(
+                                        text = "Selected: ${selectedAnswer.toString().take(14)}...",
+                                        fontSize = 10.sp,
+                                        color = EmeraldSuccess,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                // 1. Certain Button (Certain + correct = reward, certain + incorrect = reduce level)
+                                Button(
+                                    onClick = { submitWithConfidence(AnswerConfidence.CERTAIN) },
+                                    enabled = selectedAnswer != null,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(54.dp)
+                                        .testTag("certain_button"),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = EmeraldSuccess,
+                                        contentColor = Color.White,
+                                        disabledContainerColor = EmeraldSuccess.copy(alpha = 0.25f),
+                                        disabledContentColor = Color.White.copy(alpha = 0.4f)
+                                    ),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Bolt,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "Certain",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "Reward Level",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontSize = 10.sp,
+                                                color = Color.White.copy(alpha = 0.85f)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // 2. Guessing Button (Always reduces adaptive level)
+                                Button(
+                                    onClick = { submitWithConfidence(AnswerConfidence.GUESSING) },
+                                    enabled = selectedAnswer != null,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(54.dp)
+                                        .testTag("guessing_button"),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = AmberAccent,
+                                        contentColor = Color.Black,
+                                        disabledContainerColor = AmberAccent.copy(alpha = 0.25f),
+                                        disabledContentColor = Color.Black.copy(alpha = 0.4f)
+                                    ),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Psychology,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = Color.Black
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = "Guessing",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.Black
+                                            )
+                                            Text(
+                                                text = "Reduces Level",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontSize = 10.sp,
+                                                color = Color.Black.copy(alpha = 0.75f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            val isLastQuestion = currentIndex >= totalSessionQuestions - 1
+                            Button(
+                                onClick = goToNextQuestion,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .testTag("next_question_button"),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text(
+                                    text = if (isLastQuestion) "View Adaptive Results 🏆" else "Next Question →",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     ) { innerPadding ->
         if (isLoading) {
@@ -742,14 +1011,14 @@ fun QuizScreen(
 
                                 lastSubmittedConfidence?.let { conf ->
                                     val (badgeText, badgeColor) = when {
-                                        conf == AnswerConfidence.CONFIDENT && isCorrect ->
-                                            Pair("Confident · Standard Score", EmeraldSuccess)
-                                        conf == AnswerConfidence.CONFIDENT && !isCorrect ->
-                                            Pair("Confident · Level Penalty", RoseAccent)
+                                        conf == AnswerConfidence.CERTAIN && isCorrect ->
+                                            Pair("Certain · Level Rewarded 🚀", EmeraldSuccess)
+                                        conf == AnswerConfidence.CERTAIN && !isCorrect ->
+                                            Pair("Certain · Level Reduced ⚠️", RoseAccent)
                                         conf == AnswerConfidence.GUESSING && isCorrect ->
-                                            Pair("Guessing · 50% Level Penalty", AmberAccent)
+                                            Pair("Guessing · Level Reduced 🎲", AmberAccent)
                                         else ->
-                                            Pair("Guessing · Full Level Penalty", RoseAccent)
+                                            Pair("Guessing · Level Reduced ❌", RoseAccent)
                                     }
                                     Surface(
                                         color = badgeColor.copy(alpha = 0.2f),
@@ -831,99 +1100,26 @@ fun QuizScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Bottom Action Buttons: Confident vs Guessing (both submit answer)
+                // Inline Bottom Action Buttons: Confident vs Guessing (both submit answer)
                 if (!isAnswerSubmitted) {
-                    val submitWithConfidence = { confidence: AnswerConfidence ->
-                        if (selectedAnswer != null) {
-                            isAnswerSubmitted = true
-                            lastSubmittedConfidence = confidence
-                            val correct = selectedAnswer == currentQ.answer
-                            val qDiff = QuestionsRepository.difficultyToFloat(currentQ.difficulty)
-                            if (qDiff > maxDifficultyReached) maxDifficultyReached = qDiff
-
-                            val timeTaken = (questionDurationSeconds - remainingSeconds).coerceIn(1, questionDurationSeconds)
-
-                            when {
-                                // 1. Confident and correct answers is good standard score
-                                confidence == AnswerConfidence.CONFIDENT && correct -> {
-                                    consecutiveErrors = 0
-                                    lastAnswerWasCorrect = true
-                                    score++
-                                    streak++
-                                    if (streak > highestStreak) highestStreak = streak
-                                    savedToDeckMessage = false
-                                }
-
-                                // 2. Guessing and correct answer leads to lower levels with 50% penalty
-                                // Still grants question score point, but resets streak so difficulty doesn't leap forward
-                                confidence == AnswerConfidence.GUESSING && correct -> {
-                                    consecutiveErrors = 0
-                                    lastAnswerWasCorrect = true
-                                    score++
-                                    streak = 0
-                                    savedToDeckMessage = false
-                                }
-
-                                // 3. Confident and incorrect: penalty to lower levels
-                                confidence == AnswerConfidence.CONFIDENT && !correct -> {
-                                    consecutiveErrors++
-                                    lastAnswerWasCorrect = false
-                                    streak = 0
-                                    savedToDeckMessage = true
-                                    missedQuestionsList.add(currentQ)
-                                    coroutineScope.launch {
-                                        dbHelper.addMissedQuestionToFlashcard(user.username, currentQ)
-                                    }
-                                }
-
-                                // 4. Guessing and incorrect: same penalty as Confident and incorrect
-                                else -> {
-                                    consecutiveErrors++
-                                    lastAnswerWasCorrect = false
-                                    streak = 0
-                                    savedToDeckMessage = true
-                                    missedQuestionsList.add(currentQ)
-                                    coroutineScope.launch {
-                                        dbHelper.addMissedQuestionToFlashcard(user.username, currentQ)
-                                    }
-                                }
-                            }
-
-                            // Check daily goal achieved during session
-                            if (!isDailyGoalAchieved && (answeredTodayBase + currentIndex + 1) >= dailyTarget) {
-                                isDailyGoalAchieved = true
-                            }
-
-                            // Dynamic Adaptive Complexity Adjustment with confidence calibration
-                            if (isDdaActive) {
-                                val sessionAccuracy = score.toFloat() / (currentIndex + 1).toFloat()
-                                val escalationThresh = adaptiveProfile?.escalationThreshold ?: 2
-                                val adj = AdaptiveDifficultyEngine.computeDynamicAdjustment(
-                                    currentComplexity = currentComplexity,
-                                    currentTier = ddaTier,
-                                    isCorrect = correct,
-                                    confidence = confidence,
-                                    secondsTaken = timeTaken,
-                                    currentStreak = streak,
-                                    consecutiveErrors = consecutiveErrors,
-                                    sessionAccuracy = sessionAccuracy,
-                                    escalationThreshold = escalationThresh
-                                )
-                                currentComplexity = adj.newComplexity
-                                ddaTier = adj.newTier
-                                ddaEventMessage = adj.message
-                            }
-                        }
-                    }
-
                     Column(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (selectedAnswer != null) CyanAccent.copy(alpha = 0.08f) else Color.Transparent)
+                            .border(
+                                width = if (selectedAnswer != null) 1.5.dp else 1.dp,
+                                color = if (selectedAnswer != null) CyanAccent.copy(alpha = 0.5f) else Color(0xFF1E293B),
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = if (selectedAnswer == null) "Select an answer above, then submit with confidence:" else "Submit with your confidence level:",
+                            text = if (selectedAnswer == null) "Select an answer above, then submit as Certain or Guessing:" else "✓ Response selected! Submit as Certain or Guessing:",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (selectedAnswer != null) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selectedAnswer != null) CyanAccent else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 4.dp)
                         )
 
@@ -931,14 +1127,14 @@ fun QuizScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // 1. Confident Button (Standard score if correct, penalty to lower levels if wrong)
+                            // 1. Certain Button (Certain + correct = reward, certain + incorrect = reduce level)
                             Button(
-                                onClick = { submitWithConfidence(AnswerConfidence.CONFIDENT) },
+                                onClick = { submitWithConfidence(AnswerConfidence.CERTAIN) },
                                 enabled = selectedAnswer != null,
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(56.dp)
-                                    .testTag("confident_button"),
+                                    .testTag("inline_certain_button"),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = EmeraldSuccess,
                                     contentColor = Color.White,
@@ -959,12 +1155,12 @@ fun QuizScreen(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
-                                            text = "Confident",
+                                            text = "Certain",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "Standard score",
+                                            text = "Reward Level",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontSize = 10.sp,
                                             color = Color.White.copy(alpha = 0.85f)
@@ -973,14 +1169,14 @@ fun QuizScreen(
                                 }
                             }
 
-                            // 2. Guessing Button (50% penalty to lower levels if correct, full penalty if wrong)
+                            // 2. Guessing Button (Always reduces adaptive level)
                             Button(
                                 onClick = { submitWithConfidence(AnswerConfidence.GUESSING) },
                                 enabled = selectedAnswer != null,
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(56.dp)
-                                    .testTag("guessing_button"),
+                                    .testTag("inline_guessing_button"),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = AmberAccent,
                                     contentColor = Color.Black,
@@ -1008,7 +1204,7 @@ fun QuizScreen(
                                             color = Color.Black
                                         )
                                         Text(
-                                            text = "50% penalty",
+                                            text = "Reduces Level",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontSize = 10.sp,
                                             color = Color.Black.copy(alpha = 0.75f)
@@ -1021,43 +1217,11 @@ fun QuizScreen(
                 } else {
                     val isLastQuestion = currentIndex >= totalSessionQuestions - 1
                     Button(
-                        onClick = {
-                            if (isLastQuestion) {
-                                coroutineScope.launch {
-                                    dbHelper.recordQuizResult(
-                                        username = user.username,
-                                        category = categoryName,
-                                        categoryNumber = categoryNumber,
-                                        score = score,
-                                        totalQuestions = totalSessionQuestions,
-                                        difficultyLevel = maxDifficultyReached
-                                    )
-                                    dbHelper.updateUserStreakOnQuizCompletion(user.username)
-                                    showResultDialog = true
-                                }
-                            } else {
-                                currentIndex++
-                                selectedAnswer = null
-                                lastSubmittedConfidence = null
-                                isAnswerSubmitted = false
-                                isTimedOut = false
-                                remainingSeconds = questionDurationSeconds
-                                savedToDeckMessage = false
-                                ddaEventMessage = null
-
-                                // Pick next adaptive question if not yet populated
-                                if (currentIndex >= sessionQuestions.size) {
-                                    val nextQ = pickNextQuestion(ddaTier)
-                                    if (nextQ != null) {
-                                        sessionQuestions.add(nextQ)
-                                    }
-                                }
-                            }
-                        },
+                        onClick = goToNextQuestion,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp)
-                            .testTag("next_question_button"),
+                            .testTag("inline_next_question_button"),
                         shape = RoundedCornerShape(14.dp)
                     ) {
                         Text(

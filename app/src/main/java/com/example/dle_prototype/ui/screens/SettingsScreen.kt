@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Notifications
@@ -676,6 +677,110 @@ fun SettingsScreen(
                                             ),
                                             shape = RoundedCornerShape(8.dp)
                                         )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Toggle: Peak Hours Study Session Suggestions
+                        var peakStudyEnabled by remember {
+                            mutableStateOf(com.example.dle_prototype.notifications.PeakStudyNotificationManager.isPeakStudyEnabled(context))
+                        }
+                        val peakHour = remember {
+                            com.example.dle_prototype.notifications.PeakStudyNotificationManager.getScheduledHour(context)
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF131D31), RoundedCornerShape(14.dp))
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Bolt,
+                                            contentDescription = null,
+                                            tint = CyanAccent,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "Peak Learning Hours Suggestions",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                    Text(
+                                        text = "Smart study notifications timed to your historical peak focus window (${com.example.dle_prototype.data.ml.PeakLearningHoursAnalyzer.formatHour(peakHour)}).",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                }
+                                Switch(
+                                    checked = peakStudyEnabled,
+                                    onCheckedChange = { isChecked ->
+                                        if (isChecked && !hasNotificationPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        } else {
+                                            peakStudyEnabled = isChecked
+                                            com.example.dle_prototype.notifications.PeakStudyNotificationManager.setPeakStudyEnabled(context, isChecked)
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    if (isChecked) "Peak study suggestions scheduled" else "Peak study suggestions disabled"
+                                                )
+                                            }
+                                        }
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.Black,
+                                        checkedTrackColor = CyanAccent
+                                    ),
+                                    modifier = Modifier.testTag("peak_study_settings_switch")
+                                )
+                            }
+
+                            if (peakStudyEnabled) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = CyanAccent.copy(alpha = 0.15f)
+                                    ) {
+                                        Text(
+                                            text = "Scheduled: ${com.example.dle_prototype.data.ml.PeakLearningHoursAnalyzer.formatHour(peakHour)}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = CyanAccent,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            com.example.dle_prototype.notifications.PeakStudyNotificationManager.sendTestNotification(context, user.username)
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("Test peak study notification sent!")
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, CyanAccent.copy(alpha = 0.6f)),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        modifier = Modifier.testTag("settings_test_peak_notification_button")
+                                    ) {
+                                        Text("Test Alert", fontSize = 11.sp, color = CyanAccent)
                                     }
                                 }
                             }

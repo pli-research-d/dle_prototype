@@ -101,11 +101,11 @@ class QuizViewModel(
     }
 
     /**
-     * Submits the answer with the given confidence ('Confident' or 'Guessing')
+     * Submits the answer with the given confidence ('Certain' or 'Guessing')
      * and calculates the adaptive difficulty adjustment accordingly.
      */
     fun submitAnswer(
-        confidence: AnswerConfidence = _uiState.value.selectedConfidence ?: AnswerConfidence.CONFIDENT,
+        confidence: AnswerConfidence = _uiState.value.selectedConfidence ?: AnswerConfidence.CERTAIN,
         timeTakenSeconds: Int? = null,
         user: User? = null
     ) {
@@ -127,23 +127,23 @@ class QuizViewModel(
         val missedList = currentState.missedQuestions.toMutableList()
 
         when {
-            // 1. Confident & Correct: Standard good score!
-            confidence == AnswerConfidence.CONFIDENT && isCorrect -> {
+            // 1. Certain & Correct: Reward! Increment score, streak, and increase adaptive level
+            confidence == AnswerConfidence.CERTAIN && isCorrect -> {
                 newScore++
                 newStreak++
                 if (newStreak > newHighestStreak) newHighestStreak = newStreak
                 newConsecutiveErrors = 0
             }
 
-            // 2. Guessing & Correct: 50% penalty to lower levels, streak reset to prevent skipping foundational mastery
+            // 2. Guessing & Correct: Score point awarded, but streak is reset and adaptive level is reduced
             confidence == AnswerConfidence.GUESSING && isCorrect -> {
                 newScore++
                 newStreak = 0
                 newConsecutiveErrors = 0
             }
 
-            // 3. Confident & Incorrect: Full misconception penalty to lower levels
-            confidence == AnswerConfidence.CONFIDENT && !isCorrect -> {
+            // 3. Certain & Incorrect: Full misconception penalty, level reduced
+            confidence == AnswerConfidence.CERTAIN && !isCorrect -> {
                 newStreak = 0
                 newConsecutiveErrors++
                 missedList.add(currentQ)
@@ -154,7 +154,7 @@ class QuizViewModel(
                 }
             }
 
-            // 4. Guessing & Incorrect: Same penalty as Confident & Incorrect
+            // 4. Guessing & Incorrect: Full penalty, level reduced
             else -> {
                 newStreak = 0
                 newConsecutiveErrors++

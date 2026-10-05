@@ -123,4 +123,57 @@ class ConfidenceAssessmentDdaTest {
         assertEquals(confidentIncorrectResult.newComplexity, guessingIncorrectResult.newComplexity, 0.001f)
         assertEquals(confidentIncorrectResult.newTier, guessingIncorrectResult.newTier)
     }
+
+    @Test
+    fun testCertainAndGuessingAllFourVariationsAdaptiveLevelBehavior() {
+        val initialComplexity = 2.0f
+        val initialTier = "Hard"
+
+        // 1. Certain + Correct -> MUST REWARD (higher complexity)
+        val certainCorrect = AdaptiveDifficultyEngine.computeDynamicAdjustment(
+            currentComplexity = initialComplexity,
+            currentTier = initialTier,
+            isCorrect = true,
+            confidence = AnswerConfidence.CERTAIN,
+            secondsTaken = 5,
+            currentStreak = 1
+        )
+        assertTrue("Certain + Correct must increase complexity", certainCorrect.newComplexity > initialComplexity)
+        assertTrue("Certain + Correct must reward with encouraging message", certainCorrect.message.contains("Certain") || certainCorrect.message.contains("Rewarded"))
+
+        // 2. Certain + Incorrect -> MUST REDUCE adaptive level
+        val certainIncorrect = AdaptiveDifficultyEngine.computeDynamicAdjustment(
+            currentComplexity = initialComplexity,
+            currentTier = initialTier,
+            isCorrect = false,
+            confidence = AnswerConfidence.CERTAIN,
+            secondsTaken = 10,
+            consecutiveErrors = 1
+        )
+        assertTrue("Certain + Incorrect must reduce complexity", certainIncorrect.newComplexity < initialComplexity)
+        assertEquals("Certain + Incorrect must reduce tier", "Medium", certainIncorrect.newTier)
+
+        // 3. Guessing + Correct -> MUST REDUCE adaptive level
+        val guessingCorrect = AdaptiveDifficultyEngine.computeDynamicAdjustment(
+            currentComplexity = initialComplexity,
+            currentTier = initialTier,
+            isCorrect = true,
+            confidence = AnswerConfidence.GUESSING,
+            secondsTaken = 10
+        )
+        assertTrue("Guessing + Correct must reduce complexity", guessingCorrect.newComplexity < initialComplexity)
+        assertEquals("Guessing + Correct must reduce tier", "Medium", guessingCorrect.newTier)
+
+        // 4. Guessing + Incorrect -> MUST REDUCE adaptive level
+        val guessingIncorrect = AdaptiveDifficultyEngine.computeDynamicAdjustment(
+            currentComplexity = initialComplexity,
+            currentTier = initialTier,
+            isCorrect = false,
+            confidence = AnswerConfidence.GUESSING,
+            secondsTaken = 10,
+            consecutiveErrors = 1
+        )
+        assertTrue("Guessing + Incorrect must reduce complexity", guessingIncorrect.newComplexity < initialComplexity)
+        assertEquals("Guessing + Incorrect must reduce tier", "Medium", guessingIncorrect.newTier)
+    }
 }

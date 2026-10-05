@@ -415,56 +415,54 @@ fun FeedCardView(
 
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                // Countdown slider at the bottom (15s read)
-                                val explainerProgress = (explainerRemainingSeconds.toFloat() / 15f).coerceIn(0f, 1f)
+                                // Countdown slider at the bottom (15s read) like the quiz question
+                                val explainerDurationSeconds = 15
+                                val explainerProgress = (explainerRemainingSeconds.toFloat() / explainerDurationSeconds.toFloat()).coerceIn(0f, 1f)
                                 Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("explainer_15s_countdown_slider"),
                                     shape = RoundedCornerShape(12.dp),
                                     color = Color(0xFF0F172A),
-                                    border = BorderStroke(1.dp, Color(0xFF1E293B))
+                                    border = BorderStroke(
+                                        1.dp,
+                                        when {
+                                            explainerRemainingSeconds <= 3 -> RoseAccent
+                                            explainerRemainingSeconds <= 7 -> AmberAccent
+                                            else -> Color(0xFF1E293B)
+                                        }
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("explainer_15s_countdown_slider")
                                 ) {
-                                    Column(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = if (explainerRemainingSeconds <= 3) Icons.Default.HourglassTop else Icons.Default.Timer,
-                                                    contentDescription = "Read Countdown",
-                                                    tint = when {
-                                                        explainerRemainingSeconds <= 3 -> RoseAccent
-                                                        explainerRemainingSeconds <= 7 -> AmberAccent
-                                                        else -> CyanAccent
-                                                    },
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Text(
-                                                    text = if (explainerRemainingSeconds == 0) "Reading completed! (0s)" else "15s Read Countdown: ${explainerRemainingSeconds}s remaining",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = when {
-                                                        explainerRemainingSeconds <= 3 -> RoseAccent
-                                                        explainerRemainingSeconds <= 7 -> AmberAccent
-                                                        else -> Color(0xFFF1F5F9)
-                                                    },
-                                                    fontFamily = FontFamily.Monospace
-                                                )
-                                            }
+                                            Icon(
+                                                imageVector = if (explainerRemainingSeconds <= 3) Icons.Default.HourglassTop else Icons.Default.Timer,
+                                                contentDescription = "Read Countdown Timer",
+                                                tint = when {
+                                                    explainerRemainingSeconds <= 3 -> RoseAccent
+                                                    explainerRemainingSeconds <= 7 -> AmberAccent
+                                                    else -> CyanAccent
+                                                },
+                                                modifier = Modifier.size(18.dp)
+                                            )
                                             Text(
-                                                text = "${(explainerProgress * 100).toInt()}%",
-                                                fontSize = 11.sp,
+                                                text = if (explainerRemainingSeconds == 0) "Time Expired! (0s)" else "15s Read Timer: ${explainerRemainingSeconds}s",
+                                                fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = CyanAccent,
+                                                color = when {
+                                                    explainerRemainingSeconds <= 3 -> RoseAccent
+                                                    explainerRemainingSeconds <= 7 -> AmberAccent
+                                                    else -> Color(0xFFF1F5F9)
+                                                },
                                                 fontFamily = FontFamily.Monospace
                                             )
                                         }
@@ -472,7 +470,7 @@ fun FeedCardView(
                                         LinearProgressIndicator(
                                             progress = { explainerProgress },
                                             modifier = Modifier
-                                                .fillMaxWidth()
+                                                .width(90.dp)
                                                 .height(6.dp)
                                                 .clip(RoundedCornerShape(3.dp)),
                                             color = when {

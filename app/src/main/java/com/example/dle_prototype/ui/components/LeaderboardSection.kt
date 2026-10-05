@@ -868,7 +868,7 @@ private fun LeaderboardRowItem(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = entry.displayName,
+                            text = if (entry.isCurrentUser) "You" else entry.displayName,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = if (entry.isCurrentUser) CyanAccent else Color(0xFFF1F5F9),

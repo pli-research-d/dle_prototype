@@ -24,6 +24,8 @@ import com.example.dle_prototype.data.ml.AdaptiveDifficultyProfile
 class DatabaseHelper private constructor(context: Context) :
     SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, DATABASE_VERSION) {
 
+    private val appContext: Context = context.applicationContext
+
     companion object {
         const val DATABASE_NAME = "app.db"
         const val DATABASE_VERSION = 4
@@ -66,6 +68,131 @@ class DatabaseHelper private constructor(context: Context) :
 
         @Volatile
         private var INSTANCE: DatabaseHelper? = null
+
+        data class VirtualPeerTemplate(
+            val username: String,
+            val displayName: String,
+            val avatarEmoji: String,
+            val dominantTrait: String,
+            val tierLevel: String,
+            val baseStreak: Int,
+            val baseQuizzes: Int,
+            val baseScore: Int,
+            val baseAccuracy: Float,
+            val consistency: Float
+        )
+
+        val VIRTUAL_PEER_TEMPLATES = listOf(
+            // Diamond Tier (Elite, top competitors)
+            VirtualPeerTemplate("martiantiger67", "MartianTiger67", "🐯", "Consistent", "Diamond", 24, 82, 580, 97.5f, 0.95f),
+            VirtualPeerTemplate("snowyowl3", "SnowyOwl3", "🦉", "Deep Thinker", "Diamond", 21, 74, 530, 96.2f, 0.92f),
+            VirtualPeerTemplate("cosmicfalcon42", "CosmicFalcon42", "🦅", "Speed Demon", "Diamond", 18, 68, 485, 95.0f, 0.90f),
+            VirtualPeerTemplate("cyberotter19", "CyberOtter19", "🦦", "Algorithm Master", "Diamond", 16, 62, 440, 94.5f, 0.88f),
+
+            // Platinum Tier (High performers)
+            VirtualPeerTemplate("neonpanda88", "NeonPanda88", "🐼", "Conscientious", "Platinum", 14, 55, 395, 93.0f, 0.85f),
+            VirtualPeerTemplate("solarhawk55", "SolarHawk55", "⚡", "Streak Hunter", "Platinum", 12, 48, 350, 91.8f, 0.82f),
+            VirtualPeerTemplate("lunarlynx77", "LunarLynx77", "🐱", "Understanding", "Platinum", 10, 42, 315, 90.5f, 0.80f),
+            VirtualPeerTemplate("astralfox91", "AstralFox91", "🦊", "Night Owl", "Platinum", 9, 38, 280, 89.2f, 0.78f),
+
+            // Gold Tier (Steady everyday learners)
+            VirtualPeerTemplate("quantumbear23", "QuantumBear23", "🐻", "Early Bird", "Gold", 8, 33, 245, 88.0f, 0.75f),
+            VirtualPeerTemplate("stellarwolf14", "StellarWolf14", "🐺", "Bug Hunter", "Gold", 7, 29, 215, 86.8f, 0.72f),
+            VirtualPeerTemplate("mysticraven12", "MysticRaven12", "🔮", "Motivation", "Gold", 6, 25, 190, 85.5f, 0.70f),
+            VirtualPeerTemplate("crimsoncheetah34", "CrimsonCheetah34", "🐆", "Creative Coder", "Gold", 5, 22, 165, 84.2f, 0.68f),
+            VirtualPeerTemplate("pixeldragon8", "PixelDragon8", "🐉", "Steadfast", "Gold", 4, 19, 145, 83.0f, 0.65f),
+            VirtualPeerTemplate("shadowgecko61", "ShadowGecko61", "🦎", "Engagement", "Gold", 4, 16, 128, 82.0f, 0.62f),
+
+            // Silver & Bronze Tier (Casual / Emerging learners)
+            VirtualPeerTemplate("turbohedgehog5", "TurboHedgehog5", "🦔", "Explorer", "Silver", 3, 13, 105, 80.5f, 0.58f),
+            VirtualPeerTemplate("apexkoala18", "ApexKoala18", "🐨", "Rising Star", "Silver", 2, 10, 82, 79.0f, 0.55f),
+            VirtualPeerTemplate("hyperbadger7", "HyperBadger7", "🦡", "New Joiner", "Silver", 2, 7, 60, 77.5f, 0.50f),
+            VirtualPeerTemplate("echodolphin29", "EchoDolphin29", "🐬", "Weekend Warrior", "Bronze", 1, 5, 42, 75.0f, 0.45f)
+        )
+
+        data class GeneratedCommunityPeer(
+            val username: String,
+            val displayName: String,
+            val avatarEmoji: String,
+            val dailyStreak: Int,
+            val totalQuizzes: Int,
+            val totalScore: Int,
+            val accuracyPercent: Float,
+            val dominantTrait: String,
+            val tier: String
+        ) {
+            fun toContentValues(): ContentValues = ContentValues().apply {
+                put("username", username)
+                put("display_name", displayName)
+                put("avatar_emoji", avatarEmoji)
+                put("daily_streak", dailyStreak)
+                put("total_quizzes", totalQuizzes)
+                put("total_score", totalScore)
+                put("accuracy_percent", accuracyPercent)
+                put("dominant_trait", dominantTrait)
+                put("tier", tier)
+            }
+        }
+
+        fun generateDailyCommunityLearners(calendar: Calendar = Calendar.getInstance()): List<GeneratedCommunityPeer> {
+            val epochDay = (calendar.timeInMillis / (1000L * 60 * 60 * 24)).toInt()
+            val hourOfDay = calendar.get(Calendar.HOUR_OF_DAY)
+            val dayProgressRatio = ((hourOfDay + 1).toFloat() / 24f).coerceIn(0.25f, 1.0f)
+
+            return VIRTUAL_PEER_TEMPLATES.map { template ->
+                val peerSeed = (template.username.hashCode().toLong() * 373587883L) xor (epochDay.toLong() * 1000000007L)
+                val rng = java.util.Random(peerSeed)
+
+                // 1. Daily activity variation
+                val studiedToday = rng.nextFloat() < template.consistency
+                val targetQuizzesToday = if (studiedToday) {
+                    when (template.tierLevel) {
+                        "Diamond" -> rng.nextInt(3) + 3
+                        "Platinum" -> rng.nextInt(3) + 2
+                        "Gold" -> rng.nextInt(3) + 1
+                        else -> rng.nextInt(2) + 1
+                    }
+                } else 0
+                val todayQuizzes = (targetQuizzesToday * dayProgressRatio).toInt().coerceAtLeast(
+                    if (studiedToday && hourOfDay >= 12) 1 else 0
+                )
+                val todayXp = todayQuizzes * (12 + rng.nextInt(6))
+
+                // 2. Realistic streak simulation
+                val currentStreak = when (template.tierLevel) {
+                    "Diamond" -> template.baseStreak + (epochDay % 14)
+                    "Platinum" -> template.baseStreak + (epochDay % 10)
+                    "Gold" -> {
+                        val cycle = Math.abs((epochDay + template.username.hashCode()) % 15)
+                        (cycle + template.baseStreak / 2).coerceAtLeast(2)
+                    }
+                    else -> {
+                        val cycle = Math.abs((epochDay + template.username.hashCode()) % 7)
+                        (cycle % 4) + 1
+                    }
+                }
+
+                // 3. Cumulative quizzes & score reflecting progression
+                val seasonDay = Math.abs(epochDay % 30)
+                val historicalQuizzes = template.baseQuizzes + (seasonDay * (template.baseQuizzes / 20).coerceAtLeast(1))
+                val totalQuizzes = historicalQuizzes + todayQuizzes
+                val totalScore = template.baseScore + (seasonDay * (template.baseScore / 25).coerceAtLeast(5)) + todayXp
+                val accuracy = (template.baseAccuracy + (rng.nextFloat() * 2.2f - 1.1f)).coerceIn(72.0f, 99.8f)
+                val roundedAccuracy = Math.round(accuracy * 10.0f) / 10.0f
+
+                GeneratedCommunityPeer(
+                    username = template.username,
+                    displayName = template.displayName,
+                    avatarEmoji = template.avatarEmoji,
+                    dailyStreak = currentStreak,
+                    totalQuizzes = totalQuizzes,
+                    totalScore = totalScore,
+                    accuracyPercent = roundedAccuracy,
+                    dominantTrait = template.dominantTrait,
+                    tier = template.tierLevel
+                )
+            }
+        }
 
         fun getInstance(context: Context): DatabaseHelper {
             return INSTANCE ?: synchronized(this) {
@@ -250,6 +377,19 @@ class DatabaseHelper private constructor(context: Context) :
 
         db.execSQL(
             """
+            CREATE TABLE IF NOT EXISTS user_unlocked_badges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                badge_id TEXT NOT NULL,
+                unlocked_at INTEGER NOT NULL,
+                xp_awarded INTEGER NOT NULL,
+                UNIQUE(username, badge_id)
+            );
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
             CREATE TABLE IF NOT EXISTS training_checkpoints (
                 username TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
@@ -338,6 +478,7 @@ class DatabaseHelper private constructor(context: Context) :
             CREATE TABLE IF NOT EXISTS daily_goals (
                 username TEXT PRIMARY KEY,
                 target_questions INTEGER NOT NULL DEFAULT 10,
+                target_hours REAL NOT NULL DEFAULT 1.0,
                 updated_at INTEGER NOT NULL
             );
             """.trimIndent()
@@ -493,6 +634,9 @@ class DatabaseHelper private constructor(context: Context) :
             );
             """.trimIndent()
         )
+        try {
+            db.execSQL("ALTER TABLE daily_goals ADD COLUMN target_hours REAL NOT NULL DEFAULT 1.0;")
+        } catch (_: Exception) {}
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -924,6 +1068,111 @@ class DatabaseHelper private constructor(context: Context) :
                 statusBadge = statusBadge
             )
         }
+    }
+
+    suspend fun getActiveLearningModules(username: String): List<LearningModule> = withContext(Dispatchers.IO) {
+        val masteries = getCategoryMasteryStats(username)
+        val masteryMap = masteries.associateBy { it.categoryName }
+
+        val moduleDefinitions = listOf(
+            LearningModule(
+                id = "mod_kotlin_android",
+                categoryName = "JavaScript",
+                categoryNumber = 3f,
+                title = "Kotlin & Modern Android",
+                description = "Declarative UI with Compose, State Hoisting, Flow & Coroutines",
+                icon = "🤖",
+                tag = "Mobile Architecture",
+                totalLessons = 20,
+                completedLessons = ((masteryMap["JavaScript"]?.totalAttempts ?: 0) * 2 + 5).coerceIn(4, 20),
+                progressPercent = (((masteryMap["JavaScript"]?.totalAttempts ?: 0) * 2 + 5).toFloat() / 20f * 100f).coerceIn(20f, 100f),
+                currentTopic = "Coroutines & Reactive State Flow",
+                difficulty = "Intermediate",
+                status = if ((masteryMap["JavaScript"]?.totalAttempts ?: 0) >= 8) ModuleStatus.COMPLETED else ModuleStatus.IN_PROGRESS,
+                estimatedTimeMinutes = 12
+            ),
+            LearningModule(
+                id = "mod_algo_dsa",
+                categoryName = "Python",
+                categoryNumber = 6f,
+                title = "Algorithms & Data Structures",
+                description = "Binary Search Trees, Graph Traversals, Dynamic Programming & Big-O",
+                icon = "⚡",
+                tag = "Computer Science",
+                totalLessons = 20,
+                completedLessons = ((masteryMap["Python"]?.totalAttempts ?: 0) * 2 + 3).coerceIn(3, 20),
+                progressPercent = (((masteryMap["Python"]?.totalAttempts ?: 0) * 2 + 3).toFloat() / 20f * 100f).coerceIn(15f, 100f),
+                currentTopic = "Dynamic Programming & Memoization",
+                difficulty = "Advanced",
+                status = if ((masteryMap["Python"]?.accuracyPercent ?: 0f) < 60f && (masteryMap["Python"]?.totalAttempts ?: 0) > 0) ModuleStatus.REVIEW_DUE else ModuleStatus.IN_PROGRESS,
+                estimatedTimeMinutes = 15
+            ),
+            LearningModule(
+                id = "mod_web_frontend",
+                categoryName = "HTML",
+                categoryNumber = 1f,
+                title = "Web Foundation & Accessibility",
+                description = "Modern semantic HTML5, WCAG accessibility, DOM node trees",
+                icon = "🌐",
+                tag = "Frontend Core",
+                totalLessons = 16,
+                completedLessons = ((masteryMap["HTML"]?.totalAttempts ?: 0) * 2 + 8).coerceIn(8, 16),
+                progressPercent = (((masteryMap["HTML"]?.totalAttempts ?: 0) * 2 + 8).toFloat() / 16f * 100f).coerceIn(50f, 100f),
+                currentTopic = "Accessible Rich Internet Applications (ARIA)",
+                difficulty = "Beginner",
+                status = if ((masteryMap["HTML"]?.totalAttempts ?: 0) >= 4) ModuleStatus.COMPLETED else ModuleStatus.IN_PROGRESS,
+                estimatedTimeMinutes = 8
+            ),
+            LearningModule(
+                id = "mod_visual_css",
+                categoryName = "CSS",
+                categoryNumber = 2f,
+                title = "CSS Visual Systems & Design",
+                description = "Flexbox layouts, CSS Grid, animations, variables & responsive rules",
+                icon = "🎨",
+                tag = "Design Systems",
+                totalLessons = 16,
+                completedLessons = ((masteryMap["CSS"]?.totalAttempts ?: 0) * 2 + 4).coerceIn(4, 16),
+                progressPercent = (((masteryMap["CSS"]?.totalAttempts ?: 0) * 2 + 4).toFloat() / 16f * 100f).coerceIn(25f, 100f),
+                currentTopic = "CSS Grid & Fluid Layouts",
+                difficulty = "Intermediate",
+                status = ModuleStatus.IN_PROGRESS,
+                estimatedTimeMinutes = 10
+            ),
+            LearningModule(
+                id = "mod_sql_db",
+                categoryName = "MySQL",
+                categoryNumber = 5f,
+                title = "Relational Data & SQL Systems",
+                description = "Complex queries, joins, indexes, transaction ACID properties & migrations",
+                icon = "🐬",
+                tag = "Database Systems",
+                totalLessons = 18,
+                completedLessons = ((masteryMap["MySQL"]?.totalAttempts ?: 0) * 2 + 6).coerceIn(6, 18),
+                progressPercent = (((masteryMap["MySQL"]?.totalAttempts ?: 0) * 2 + 6).toFloat() / 18f * 100f).coerceIn(33f, 100f),
+                currentTopic = "B-Tree Indexing & Query Plans",
+                difficulty = "Intermediate",
+                status = ModuleStatus.IN_PROGRESS,
+                estimatedTimeMinutes = 12
+            ),
+            LearningModule(
+                id = "mod_backend_php",
+                categoryName = "PHP",
+                categoryNumber = 4f,
+                title = "Server Runtime & API Services",
+                description = "HTTP request lifecycles, REST API security, sessions & backend patterns",
+                icon = "🐘",
+                tag = "Backend Services",
+                totalLessons = 15,
+                completedLessons = ((masteryMap["PHP"]?.totalAttempts ?: 0) * 2 + 2).coerceIn(2, 15),
+                progressPercent = (((masteryMap["PHP"]?.totalAttempts ?: 0) * 2 + 2).toFloat() / 15f * 100f).coerceIn(13f, 100f),
+                currentTopic = "RESTful APIs & Authentication",
+                difficulty = "Beginner",
+                status = ModuleStatus.IN_PROGRESS,
+                estimatedTimeMinutes = 10
+            )
+        )
+        moduleDefinitions
     }
 
     suspend fun getPersonalizedActionPlan(
@@ -1779,48 +2028,53 @@ class DatabaseHelper private constructor(context: Context) :
         existing
     }
 
-    suspend fun seedCommunityLearnersIfEmpty() = withContext(Dispatchers.IO) {
-        val db = writableDatabase
-        val cursor = db.rawQuery("SELECT COUNT(*) FROM community_learners", null)
-        val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
-        cursor.close()
+    fun generateDailyCommunityLearners(calendar: Calendar = Calendar.getInstance()): List<GeneratedCommunityPeer> =
+        Companion.generateDailyCommunityLearners(calendar)
 
-        if (count == 0) {
-            val seeds = listOf(
-                arrayOf("sudo_sophia", "sudo Sophia", "⚡", "14", "48", "230", "96.5", "Motivation", "Diamond"),
-                arrayOf("sudo_vance", "sudo Vance", "🔥", "12", "42", "198", "94.2", "Conscientious", "Diamond"),
-                arrayOf("sudo_elena", "sudo Elena", "🧠", "9", "35", "165", "91.0", "Understanding", "Platinum"),
-                arrayOf("sudo_alex", "sudo Alex", "🚀", "7", "28", "134", "89.5", "Engagement", "Platinum"),
-                arrayOf("sudo_samurai", "sudo Samurai", "🎯", "5", "22", "102", "87.0", "Conscientious", "Gold"),
-                arrayOf("sudo_root", "sudo Root", "✨", "4", "19", "88", "85.5", "Motivation", "Gold"),
-                arrayOf("sudo_ninja", "sudo Ninja", "💡", "3", "15", "71", "84.0", "Understanding", "Silver"),
-                arrayOf("sudo_daemon", "sudo Daemon", "🌟", "2", "11", "52", "82.0", "Engagement", "Silver")
-            )
-            for (s in seeds) {
-                val cv = ContentValues().apply {
-                    put("username", s[0])
-                    put("display_name", s[1])
-                    put("avatar_emoji", s[2])
-                    put("daily_streak", s[3].toInt())
-                    put("total_quizzes", s[4].toInt())
-                    put("total_score", s[5].toInt())
-                    put("accuracy_percent", s[6].toFloat())
-                    put("dominant_trait", s[7])
-                    put("tier", s[8])
-                }
-                db.insertWithOnConflict("community_learners", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+    suspend fun syncCommunityLearnersDaily(force: Boolean = false) = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        val prefs = appContext.getSharedPreferences("virtual_peers_prefs", Context.MODE_PRIVATE)
+        val cal = Calendar.getInstance()
+        val currentEpochDay = (cal.timeInMillis / (1000L * 60 * 60 * 24)).toInt()
+        val lastEpochDay = prefs.getInt("last_virtual_peer_epoch_day", -1)
+
+        val cursorSudo = db.rawQuery(
+            "SELECT COUNT(*) FROM community_learners WHERE username LIKE '%sudo%' OR display_name LIKE '%sudo%' OR username IN ('elena_r', 'marcus_c', 'kai_n', 'sophia_v')",
+            null
+        )
+        val sudoCount = if (cursorSudo.moveToFirst()) cursorSudo.getInt(0) else 0
+        cursorSudo.close()
+
+        val cursorCount = db.rawQuery("SELECT COUNT(*) FROM community_learners", null)
+        val totalCount = if (cursorCount.moveToFirst()) cursorCount.getInt(0) else 0
+        cursorCount.close()
+
+        val needsRegen = force || sudoCount > 0 || totalCount < 10 || lastEpochDay != currentEpochDay
+
+        if (needsRegen) {
+            db.delete("community_learners", null, null)
+            db.delete("friends", "friend_username LIKE '%sudo%' OR owner_username LIKE '%sudo%' OR friend_username IN ('elena_r', 'marcus_c', 'kai_n')", null)
+
+            val peers = generateDailyCommunityLearners(cal)
+            for (peer in peers) {
+                db.insertWithOnConflict("community_learners", null, peer.toContentValues(), SQLiteDatabase.CONFLICT_REPLACE)
             }
+            prefs.edit().putInt("last_virtual_peer_epoch_day", currentEpochDay).apply()
         }
     }
 
+    suspend fun seedCommunityLearnersIfEmpty() = syncCommunityLearnersDaily(false)
+
     suspend fun ensureDefaultFriends(ownerUsername: String) = withContext(Dispatchers.IO) {
         val db = writableDatabase
+        db.delete("friends", "friend_username LIKE '%sudo%' OR owner_username LIKE '%sudo%' OR friend_username IN ('elena_r', 'marcus_c', 'kai_n')", null)
+
         val cursor = db.rawQuery("SELECT COUNT(*) FROM friends WHERE owner_username = ?", arrayOf(ownerUsername))
         val count = if (cursor.moveToFirst()) cursor.getInt(0) else 0
         cursor.close()
 
         if (count == 0) {
-            val defaults = listOf("sudo_elena", "sudo_alex", "sudo_ninja")
+            val defaults = listOf("martiantiger67", "snowyowl3", "cosmicfalcon42")
             val now = System.currentTimeMillis()
             for (f in defaults) {
                 if (f != ownerUsername) {
@@ -1900,20 +2154,19 @@ class DatabaseHelper private constructor(context: Context) :
         )
         while (cursor.moveToNext()) {
             val u = cursor.getString(0)
-            val rawName = cursor.getString(1)
-            val sudoName = if (rawName.startsWith("sudo", ignoreCase = true)) rawName else "sudo $rawName"
-            val sudoUsername = if (u.startsWith("sudo", ignoreCase = true)) u else "sudo_${u.lowercase()}"
-            candidates[sudoUsername] = LeaderboardEntry(
+            val cleanName = cursor.getString(1)
+            val isUser = u.equals(currentUsername, ignoreCase = true)
+            candidates[u] = LeaderboardEntry(
                 rank = 0,
-                username = sudoUsername,
-                displayName = sudoName,
+                username = u,
+                displayName = if (isUser) "You" else cleanName,
                 avatarEmoji = cursor.getString(2),
                 dailyStreak = cursor.getInt(3),
                 totalQuizzes = cursor.getInt(4),
                 totalScore = cursor.getInt(5),
                 accuracyPercent = cursor.getFloat(6),
-                isCurrentUser = (u.equals(currentUsername, ignoreCase = true) || sudoUsername.equals(currentUsername, ignoreCase = true)),
-                isFriend = friends.contains(u) || friends.contains(sudoUsername),
+                isCurrentUser = isUser,
+                isFriend = friends.contains(u),
                 dominantTrait = cursor.getString(7),
                 tier = cursor.getString(8),
                 rankDelta = 0
@@ -1935,7 +2188,7 @@ class DatabaseHelper private constructor(context: Context) :
         candidates[currentUsername] = LeaderboardEntry(
             rank = 0,
             username = currentUsername,
-            displayName = currentUsername,
+            displayName = "You",
             avatarEmoji = "🚀",
             dailyStreak = maxOf(userStreak, userStats.currentDailyStreak),
             totalQuizzes = userStats.totalQuizzes,
@@ -2004,41 +2257,207 @@ class DatabaseHelper private constructor(context: Context) :
         }
         cursorQuestions.close()
 
-        // Get target questions goal
-        val cursorGoal = readableDatabase.rawQuery(
-            "SELECT target_questions FROM daily_goals WHERE username = ?",
-            arrayOf(username)
-        )
-        val target = if (cursorGoal.moveToFirst() && !cursorGoal.isNull(0)) {
-            cursorGoal.getInt(0)
-        } else {
-            10 // Default daily goal: 10 questions
+        // Get target questions goal and target hours
+        var targetQuestions = 10
+        var targetHours = 1.0f
+        try {
+            val cursorGoal = readableDatabase.rawQuery(
+                "SELECT target_questions, target_hours FROM daily_goals WHERE username = ?",
+                arrayOf(username)
+            )
+            if (cursorGoal.moveToFirst()) {
+                if (!cursorGoal.isNull(0)) targetQuestions = cursorGoal.getInt(0)
+                if (!cursorGoal.isNull(1)) targetHours = cursorGoal.getFloat(1).coerceAtLeast(0.25f)
+            }
+            cursorGoal.close()
+        } catch (_: Exception) {
+            try {
+                val cursorGoal = readableDatabase.rawQuery(
+                    "SELECT target_questions FROM daily_goals WHERE username = ?",
+                    arrayOf(username)
+                )
+                if (cursorGoal.moveToFirst() && !cursorGoal.isNull(0)) {
+                    targetQuestions = cursorGoal.getInt(0)
+                }
+                cursorGoal.close()
+            } catch (_: Exception) {}
         }
-        cursorGoal.close()
 
-        val percent = if (target > 0) {
-            (answeredToday.toFloat() / target.toFloat()).coerceIn(0f, 1f)
+        // Count today's study sessions
+        var studyDurationSeconds = 0L
+        try {
+            val cursorStudy = readableDatabase.rawQuery(
+                "SELECT SUM(duration_seconds) FROM study_sessions WHERE username = ? AND timestamp >= ?",
+                arrayOf(username, startOfDay.toString())
+            )
+            if (cursorStudy.moveToFirst() && !cursorStudy.isNull(0)) {
+                studyDurationSeconds = cursorStudy.getLong(0)
+            }
+            cursorStudy.close()
+        } catch (_: Exception) {}
+
+        // Calculate time spent today: study sessions + active quiz answering (1.5 mins per question)
+        val quizMinutes = answeredToday * 1.5f
+        val studyMinutes = studyDurationSeconds / 60.0f
+        val totalMinutesToday = quizMinutes + studyMinutes
+        val hoursCompletedToday = totalMinutesToday / 60.0f
+
+        val questionsPercent = if (targetQuestions > 0) {
+            (answeredToday.toFloat() / targetQuestions.toFloat()).coerceIn(0f, 1f)
         } else {
             1f
         }
 
+        val hoursPercent = if (targetHours > 0f) {
+            (hoursCompletedToday / targetHours).coerceAtLeast(0f)
+        } else {
+            1f
+        }
+
+        val isAchieved = (hoursCompletedToday >= targetHours) || (answeredToday >= targetQuestions && answeredToday > 0)
+
         DailyGoalProgress(
-            targetQuestions = target,
+            targetQuestions = targetQuestions,
             answeredToday = answeredToday,
-            percentComplete = percent,
-            isAchieved = answeredToday >= target
+            percentComplete = questionsPercent,
+            isAchieved = isAchieved,
+            targetHours = targetHours,
+            hoursCompletedToday = hoursCompletedToday,
+            minutesCompletedToday = totalMinutesToday,
+            hoursPercentComplete = hoursPercent
         )
     }
 
     suspend fun setDailyGoal(username: String, targetQuestions: Int): DailyGoalProgress = withContext(Dispatchers.IO) {
         val validTarget = targetQuestions.coerceIn(3, 100)
+        val existing = getDailyGoalProgress(username)
         val cv = ContentValues().apply {
             put("username", username)
             put("target_questions", validTarget)
+            put("target_hours", existing.targetHours)
             put("updated_at", System.currentTimeMillis())
         }
         writableDatabase.insertWithOnConflict("daily_goals", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
         getDailyGoalProgress(username)
+    }
+
+    suspend fun setDailyTargetHours(username: String, targetHours: Float): DailyGoalProgress = withContext(Dispatchers.IO) {
+        val validTargetHours = targetHours.coerceIn(0.25f, 12.0f)
+        val existing = getDailyGoalProgress(username)
+        val cv = ContentValues().apply {
+            put("username", username)
+            put("target_questions", existing.targetQuestions)
+            put("target_hours", validTargetHours)
+            put("updated_at", System.currentTimeMillis())
+        }
+        writableDatabase.insertWithOnConflict("daily_goals", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        getDailyGoalProgress(username)
+    }
+
+    suspend fun getPeakLearningHoursAnalysis(username: String): com.example.dle_prototype.data.ml.PeakLearningHoursAnalysis = withContext(Dispatchers.IO) {
+        val attempts = getRecentQuizAttempts(username, limit = 300)
+        val sessions = getStudySessions(username, limit = 300)
+        com.example.dle_prototype.data.ml.PeakLearningHoursAnalyzer.analyze(attempts, sessions)
+    }
+
+    // ----------------------------------------------------
+    // DIGITAL ACHIEVEMENT BADGES DATA LAYER
+    // ----------------------------------------------------
+
+    suspend fun getUnlockedBadges(username: String): Map<String, Long> = withContext(Dispatchers.IO) {
+        val map = mutableMapOf<String, Long>()
+        try {
+            val cursor = readableDatabase.rawQuery(
+                "SELECT badge_id, unlocked_at FROM user_unlocked_badges WHERE username = ?",
+                arrayOf(username)
+            )
+            cursor.use {
+                val bIdx = it.getColumnIndexOrThrow("badge_id")
+                val uIdx = it.getColumnIndexOrThrow("unlocked_at")
+                while (it.moveToNext()) {
+                    map[it.getString(bIdx)] = it.getLong(uIdx)
+                }
+            }
+        } catch (_: Exception) {}
+        map
+    }
+
+    suspend fun awardBadge(
+        username: String,
+        badgeId: String,
+        xpAwarded: Int,
+        timestamp: Long = System.currentTimeMillis()
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val cv = ContentValues().apply {
+                put("username", username)
+                put("badge_id", badgeId)
+                put("unlocked_at", timestamp)
+                put("xp_awarded", xpAwarded)
+            }
+            val rowId = writableDatabase.insertWithOnConflict(
+                "user_unlocked_badges",
+                null,
+                cv,
+                SQLiteDatabase.CONFLICT_IGNORE
+            )
+            if (rowId > 0) {
+                val def = com.example.dle_prototype.data.badges.BadgeCatalog.getDefinition(badgeId)
+                val badgeTitle = def?.title ?: "Milestone Badge"
+                val historyCv = ContentValues().apply {
+                    put("username", username)
+                    put("title", "Badge Awarded: $badgeTitle")
+                    put("description", "+$xpAwarded XP for unlocking ${def?.category?.displayName ?: "milestone"}")
+                    put("fuel_change", 15)
+                    put("xp_change", xpAwarded)
+                    put("timestamp", timestamp)
+                }
+                writableDatabase.insert("reward_history", null, historyCv)
+                true
+            } else false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun checkAndAwardBadges(username: String): com.example.dle_prototype.data.badges.BadgeEvaluationResult = withContext(Dispatchers.IO) {
+        val streakData = getUserStreakData(username)
+        val streak = streakData.currentStreak
+        val longest = streakData.longestStreak
+        val attempts = getRecentQuizAttempts(username, 300)
+        val sessions = getStudySessions(username, 300)
+        val dailyGoal = getDailyGoalProgress(username)
+        val previouslyUnlocked = getUnlockedBadges(username)
+
+        val evalResult = com.example.dle_prototype.data.badges.BadgeSystemEngine.evaluate(
+            dailyStreak = streak,
+            longestStreak = longest,
+            quizAttempts = attempts,
+            studySessions = sessions,
+            dailyGoalProgress = dailyGoal,
+            previouslyUnlockedMap = previouslyUnlocked
+        )
+
+        for (newBadge in evalResult.newlyAwardedBadges) {
+            awardBadge(
+                username = username,
+                badgeId = newBadge.id,
+                xpAwarded = newBadge.xpReward,
+                timestamp = newBadge.unlockedAt ?: System.currentTimeMillis()
+            )
+        }
+
+        evalResult
+    }
+
+    suspend fun getSpacedRepetitionOverview(username: String): com.example.dle_prototype.data.ml.SpacedRepetitionOverview = withContext(Dispatchers.IO) {
+        val attempts = getAllQuizHistory(username, limit = 300)
+        val flashcards = getAllFlashcards(username)
+        com.example.dle_prototype.data.ml.SpacedRepetitionScheduler.scheduleTopics(
+            quizAttempts = attempts,
+            flashcards = flashcards,
+            currentTimeMillis = System.currentTimeMillis()
+        )
     }
 
     // ----------------------------------------------------
@@ -2510,8 +2929,12 @@ class DatabaseHelper private constructor(context: Context) :
 
     suspend fun getRecentDuels(username: String, limit: Int = 5): List<DuelMatchRecord> = withContext(Dispatchers.IO) {
         val list = mutableListOf<DuelMatchRecord>()
-        val db = readableDatabase
-        val cursor = db.query(
+        val wdb = writableDatabase
+        // Migrate legacy names to fictional names
+        wdb.execSQL("UPDATE user_duels SET opponent_name = 'SnowyOwl3', opponent_avatar = '🦉' WHERE opponent_name IN ('Sarah Chen', 'Sarah', 'sarah_chen')")
+        wdb.execSQL("UPDATE user_duels SET opponent_name = 'MartianTiger67', opponent_avatar = '🐯' WHERE opponent_name IN ('Alex Rivera', 'Alex', 'alex_rivera')")
+
+        val cursor = wdb.query(
             "user_duels",
             null,
             "username = ?",
@@ -2542,12 +2965,12 @@ class DatabaseHelper private constructor(context: Context) :
             }
         }
         if (list.isEmpty()) {
-            // Seed a sample duel so UI is alive
+            // Seed sample duels with fictional opponent names
             val seeded = listOf(
                 DuelMatchRecord(
                     username = username,
-                    opponentName = "Sarah Chen",
-                    opponentAvatar = "⚡",
+                    opponentName = "SnowyOwl3",
+                    opponentAvatar = "🦉",
                     opponentTier = "Diamond",
                     category = "JavaScript",
                     userScore = 8,
@@ -2559,9 +2982,9 @@ class DatabaseHelper private constructor(context: Context) :
                 ),
                 DuelMatchRecord(
                     username = username,
-                    opponentName = "Alex Rivera",
-                    opponentAvatar = "🦊",
-                    opponentTier = "Platinum",
+                    opponentName = "MartianTiger67",
+                    opponentAvatar = "🐯",
+                    opponentTier = "Diamond",
                     category = "Python",
                     userScore = 6,
                     opponentScore = 7,

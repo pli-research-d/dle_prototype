@@ -4,8 +4,12 @@ import com.example.dle_prototype.data.Question
 import kotlin.math.abs
 
 enum class AnswerConfidence {
-    CONFIDENT,
-    GUESSING
+    CERTAIN,
+    GUESSING;
+
+    companion object {
+        val CONFIDENT = CERTAIN
+    }
 }
 
 data class AdaptiveDifficultyProfile(
@@ -100,8 +104,8 @@ object AdaptiveDifficultyEngine {
         val baseErrorPenalty = if (secondsTaken <= 4) 0.32f else 0.22f
 
         when {
-            // 1. Confident & Correct: Standard good score!
-            confidence == AnswerConfidence.CONFIDENT && isCorrect -> {
+            // 1. Certain & Correct: Reward! Increases adaptive complexity level & promotes tier
+            confidence == AnswerConfidence.CERTAIN && isCorrect -> {
                 val speedBonus = when {
                     secondsTaken <= 7 -> 0.22f
                     secondsTaken <= 14 -> 0.12f
@@ -112,30 +116,30 @@ object AdaptiveDifficultyEngine {
                 if (currentStreak >= escalationThreshold) {
                     if (currentTier == "Easy") {
                         newTier = "Medium"
-                        adjustmentReason = "🚀 Streak of $currentStreak! Confident mastery escalates to Medium tier."
+                        adjustmentReason = "🚀 Streak of $currentStreak! Certain (Confident) mastery escalates to Medium tier."
                     } else if (currentTier == "Medium") {
                         newTier = "Hard"
-                        adjustmentReason = "🔥 Master streak of $currentStreak! Confident mastery escalates to Hard tier."
+                        adjustmentReason = "🔥 Master streak of $currentStreak! Certain (Confident) mastery escalates to Hard tier."
                     } else {
-                        adjustmentReason = "⚡ Hard tier sustained! Confident velocity bonus (+${(speedBonus * 100).toInt()}% speed in ${secondsTaken}s)."
+                        adjustmentReason = "⚡ Hard tier sustained! Certain velocity bonus (+${(speedBonus * 100).toInt()}% speed in ${secondsTaken}s). Confident mastery."
                     }
                 } else {
-                    adjustmentReason = "🎯 Confident & Correct! Good standard score (+${"%.2f".format(speedBonus + 0.12f)} complexity score)."
+                    adjustmentReason = "🎯 Certain & Correct! Rewarded (+${"%.2f".format(speedBonus + 0.12f)} adaptive complexity). Confident mastery."
                 }
             }
 
-            // 2. Confident & Incorrect: Strong misconception penalty to lower levels!
-            confidence == AnswerConfidence.CONFIDENT && !isCorrect -> {
+            // 2. Certain & Incorrect: Misconception penalty reduces adaptive level
+            confidence == AnswerConfidence.CERTAIN && !isCorrect -> {
                 newComplexity = (newComplexity - baseErrorPenalty).coerceAtLeast(1.0f)
                 newTier = when (currentTier) {
                     "Hard" -> "Medium"
                     "Medium" -> "Easy"
                     else -> "Easy"
                 }
-                adjustmentReason = "⚠️ Confident but Incorrect (Misconception): Full penalty to lower level ($newTier) to repair conceptual gaps."
+                adjustmentReason = "⚠️ Certain but Incorrect: Misconception penalty reduced adaptive level to $newTier to repair conceptual gaps."
             }
 
-            // 3. Guessing & Correct: Leads to lower levels with 50% penalty!
+            // 3. Guessing & Correct: Reduces adaptive level with 50% penalty
             confidence == AnswerConfidence.GUESSING && isCorrect -> {
                 val halfPenalty = baseErrorPenalty * 0.50f
                 newComplexity = (newComplexity - halfPenalty).coerceAtLeast(1.0f)
@@ -144,10 +148,10 @@ object AdaptiveDifficultyEngine {
                     currentTier == "Medium" && (newComplexity < 1.8f || consecutiveErrors >= 1) -> "Easy"
                     else -> currentTier
                 }
-                adjustmentReason = "🎲 Guessing & Correct: Calibrating to lower level ($newTier) with 50% penalty to build genuine confidence."
+                adjustmentReason = "🎲 Guessing & Correct: Reduced adaptive level to $newTier (50% penalty to lower levels) to build genuine confidence."
             }
 
-            // 4. Guessing & Incorrect: Same penalty as Confident & Incorrect (full penalty to lower levels)
+            // 4. Guessing & Incorrect: Full penalty reduces adaptive level
             else -> {
                 newComplexity = (newComplexity - baseErrorPenalty).coerceAtLeast(1.0f)
                 newTier = when (currentTier) {
@@ -155,7 +159,7 @@ object AdaptiveDifficultyEngine {
                     "Medium" -> "Easy"
                     else -> "Easy"
                 }
-                adjustmentReason = "❌ Guessing & Incorrect: Full penalty to lower level ($newTier) to reinforce core fundamentals."
+                adjustmentReason = "❌ Guessing & Incorrect: Reduced adaptive level to $newTier (full penalty) to reinforce core fundamentals."
             }
         }
 

@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.example.dle_prototype.data.DatabaseHelper
 import com.example.dle_prototype.data.User
 import com.example.dle_prototype.notifications.DailyStreakReminderManager
@@ -68,16 +69,29 @@ class MainActivity : ComponentActivity() {
             DailyStreakReminderManager.scheduleDailyReminder(this, hour, minute)
         }
 
+        // Initialize and sync peak study session notifications based on progress data
+        com.example.dle_prototype.notifications.PeakStudyNotificationManager.createNotificationChannel(this)
+        com.example.dle_prototype.notifications.PeakStudyNotificationManager.syncAndSchedulePeakStudyAlert(this, dbHelper)
+
         val startQuizFromNotification = intent?.getBooleanExtra("EXTRA_START_QUIZ", false) ?: false
 
         setContent {
-            DLETheme {
+            val context = LocalContext.current
+            var activeSettings by remember { mutableStateOf<com.example.dle_prototype.data.UserSettings?>(null) }
+
+            DLETheme(userSettings = activeSettings) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     DleApp(
                         dbHelper = dbHelper,
                         startQuizImmediately = startQuizFromNotification,
                         onUserChanged = { user ->
                             activeUsername = user?.username
+                            activeSettings = if (user != null) {
+                                com.example.dle_prototype.data.UserSettingsManager.loadSettings(context, user.username)
+                            } else null
+                        },
+                        onThemeSettingsChanged = { updated ->
+                            activeSettings = updated
                         }
                     )
                 }
@@ -106,7 +120,8 @@ class MainActivity : ComponentActivity() {
 fun DleApp(
     dbHelper: DatabaseHelper,
     startQuizImmediately: Boolean = false,
-    onUserChanged: (User?) -> Unit
+    onUserChanged: (User?) -> Unit,
+    onThemeSettingsChanged: (com.example.dle_prototype.data.UserSettings) -> Unit = {}
 ) {
     var currentUser by remember { mutableStateOf<User?>(null) }
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Auth) }
@@ -166,6 +181,7 @@ fun DleApp(
                         onOpenSettings = {
                             currentScreen = Screen.Settings
                         },
+                        onThemeSettingsChanged = onThemeSettingsChanged,
                         onLogout = {
                             currentUser = null
                             onUserChanged(null)

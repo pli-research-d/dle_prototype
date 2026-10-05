@@ -130,9 +130,9 @@ data class LeaderboardEntry(
     val displayName: String,
     val avatarEmoji: String,
     val dailyStreak: Int,
-    val totalQuizzes: Int,
-    val totalScore: Int,
-    val accuracyPercent: Float,
+    val totalQuizzes: Int = 0,
+    val totalScore: Int = 0,
+    val accuracyPercent: Float = 85f,
     val isCurrentUser: Boolean = false,
     val isFriend: Boolean = false,
     val dominantTrait: String = "Balanced",
@@ -144,7 +144,11 @@ data class DailyGoalProgress(
     val targetQuestions: Int = 10,
     val answeredToday: Int = 0,
     val percentComplete: Float = 0f,
-    val isAchieved: Boolean = false
+    val isAchieved: Boolean = false,
+    val targetHours: Float = 1.0f,
+    val hoursCompletedToday: Float = 0f,
+    val minutesCompletedToday: Float = 0f,
+    val hoursPercentComplete: Float = 0f
 )
 
 data class CategoryMastery(
@@ -331,6 +335,30 @@ data class SquadMember(
     val weeklyXp: Int,
     val isLeader: Boolean = false
 )
+
+data class LearningModule(
+    val id: String,
+    val categoryName: String,
+    val categoryNumber: Float,
+    val title: String,
+    val description: String,
+    val icon: String,
+    val tag: String,
+    val totalLessons: Int = 20,
+    val completedLessons: Int,
+    val progressPercent: Float,
+    val currentTopic: String,
+    val difficulty: String,
+    val status: ModuleStatus,
+    val estimatedTimeMinutes: Int = 10
+)
+
+enum class ModuleStatus {
+    IN_PROGRESS,
+    REVIEW_DUE,
+    COMPLETED,
+    NOT_STARTED
+}
 
 
 

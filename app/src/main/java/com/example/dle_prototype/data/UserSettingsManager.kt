@@ -12,7 +12,8 @@ data class PredefinedTheme(
     val backgroundColorHex: String,
     val foregroundColorHex: String,
     val accentColorHex: String,
-    val buttonColorHex: String
+    val buttonColorHex: String,
+    val buttonClickedColorHex: String = "#4338CA"
 )
 
 data class AvatarThemePreset(
@@ -35,6 +36,7 @@ data class UserSettings(
     val foregroundColorHex: String = "#151D2F",
     val accentColorHex: String = "#00F5FF",
     val buttonColorHex: String = "#6366F1",
+    val buttonClickedColorHex: String = "#4338CA",
     val themePresetId: String = "midnight_cyber",
     val dailyReminderEnabled: Boolean = true,
     val reminderHour: Int = 20,
@@ -54,7 +56,8 @@ object UserSettingsManager {
             backgroundColorHex = "#0B0F19",
             foregroundColorHex = "#151D2F",
             accentColorHex = "#00F5FF",
-            buttonColorHex = "#6366F1"
+            buttonColorHex = "#6366F1",
+            buttonClickedColorHex = "#4338CA"
         ),
         PredefinedTheme(
             id = "emerald_matrix",
@@ -63,7 +66,8 @@ object UserSettingsManager {
             backgroundColorHex = "#061A14",
             foregroundColorHex = "#0E2D22",
             accentColorHex = "#10B981",
-            buttonColorHex = "#059669"
+            buttonColorHex = "#059669",
+            buttonClickedColorHex = "#047857"
         ),
         PredefinedTheme(
             id = "solar_flare",
@@ -72,7 +76,8 @@ object UserSettingsManager {
             backgroundColorHex = "#1A1108",
             foregroundColorHex = "#2C1E10",
             accentColorHex = "#F59E0B",
-            buttonColorHex = "#EF4444"
+            buttonColorHex = "#EF4444",
+            buttonClickedColorHex = "#B91C1C"
         ),
         PredefinedTheme(
             id = "royal_amethyst",
@@ -81,7 +86,8 @@ object UserSettingsManager {
             backgroundColorHex = "#13091F",
             foregroundColorHex = "#241438",
             accentColorHex = "#C084FC",
-            buttonColorHex = "#8B5CF6"
+            buttonColorHex = "#8B5CF6",
+            buttonClickedColorHex = "#6D28D9"
         ),
         PredefinedTheme(
             id = "crimson_neon",
@@ -90,7 +96,8 @@ object UserSettingsManager {
             backgroundColorHex = "#18080C",
             foregroundColorHex = "#2B1218",
             accentColorHex = "#F43F5E",
-            buttonColorHex = "#BE123C"
+            buttonColorHex = "#BE123C",
+            buttonClickedColorHex = "#881337"
         ),
         PredefinedTheme(
             id = "nordic_frost",
@@ -99,7 +106,8 @@ object UserSettingsManager {
             backgroundColorHex = "#F8FAFC",
             foregroundColorHex = "#FFFFFF",
             accentColorHex = "#0284C7",
-            buttonColorHex = "#0369A1"
+            buttonColorHex = "#0369A1",
+            buttonClickedColorHex = "#075985"
         ),
         PredefinedTheme(
             id = "high_contrast",
@@ -108,7 +116,8 @@ object UserSettingsManager {
             backgroundColorHex = "#000000",
             foregroundColorHex = "#18181B",
             accentColorHex = "#FFFFFF",
-            buttonColorHex = "#3F3F46"
+            buttonColorHex = "#3F3F46",
+            buttonClickedColorHex = "#71717A"
         ),
         PredefinedTheme(
             id = "deep_ocean",
@@ -117,14 +126,36 @@ object UserSettingsManager {
             backgroundColorHex = "#031726",
             foregroundColorHex = "#072740",
             accentColorHex = "#38BDF8",
-            buttonColorHex = "#2563EB"
+            buttonColorHex = "#2563EB",
+            buttonClickedColorHex = "#1D4ED8"
+        ),
+        PredefinedTheme(
+            id = "sunset_vaporwave",
+            name = "Sunset Vaporwave",
+            description = "Dusk plum canvas with neon magenta and golden amber glow",
+            backgroundColorHex = "#180D2B",
+            foregroundColorHex = "#27123D",
+            accentColorHex = "#F43F5E",
+            buttonColorHex = "#9333EA",
+            buttonClickedColorHex = "#7E22CE"
+        ),
+        PredefinedTheme(
+            id = "cyberpunk_gold",
+            name = "Cyberpunk Gold",
+            description = "Pitch black darkness with electric yellow and hazard orange",
+            backgroundColorHex = "#0A0A0A",
+            foregroundColorHex = "#171717",
+            accentColorHex = "#FACC15",
+            buttonColorHex = "#F59E0B",
+            buttonClickedColorHex = "#D97706"
         )
     )
 
-    val SWATCHES_BACKGROUND = listOf("#0B0F19", "#000000", "#061A14", "#1A1108", "#13091F", "#18080C", "#031726", "#F8FAFC")
-    val SWATCHES_FOREGROUND = listOf("#151D2F", "#18181B", "#0E2D22", "#2C1E10", "#241438", "#2B1218", "#072740", "#FFFFFF")
-    val SWATCHES_ACCENT = listOf("#00F5FF", "#10B981", "#F59E0B", "#C084FC", "#F43F5E", "#38BDF8", "#E11D48", "#FFFFFF")
-    val SWATCHES_BUTTON = listOf("#6366F1", "#059669", "#EF4444", "#8B5CF6", "#BE123C", "#2563EB", "#D97706", "#3F3F46")
+    val SWATCHES_BACKGROUND = listOf("#0B0F19", "#000000", "#061A14", "#1A1108", "#13091F", "#18080C", "#031726", "#180D2B", "#0A0A0A", "#F8FAFC")
+    val SWATCHES_FOREGROUND = listOf("#151D2F", "#18181B", "#0E2D22", "#2C1E10", "#241438", "#2B1218", "#072740", "#27123D", "#171717", "#FFFFFF")
+    val SWATCHES_ACCENT = listOf("#00F5FF", "#10B981", "#F59E0B", "#C084FC", "#F43F5E", "#38BDF8", "#FACC15", "#E11D48", "#A855F7", "#FFFFFF")
+    val SWATCHES_BUTTON = listOf("#6366F1", "#059669", "#EF4444", "#8B5CF6", "#BE123C", "#2563EB", "#9333EA", "#F59E0B", "#D97706", "#3F3F46")
+    val SWATCHES_BUTTON_CLICKED = listOf("#4338CA", "#047857", "#B91C1C", "#6D28D9", "#881337", "#1D4ED8", "#7E22CE", "#B45309", "#71717A", "#075985")
 
     fun parseHexColor(hex: String, fallback: Color = Color.Unspecified): Color {
         return try {
@@ -196,6 +227,7 @@ object UserSettingsManager {
             foregroundColorHex = prefs.getString("foreground_color_hex", matchingTheme.foregroundColorHex) ?: matchingTheme.foregroundColorHex,
             accentColorHex = prefs.getString("accent_color_hex", matchingTheme.accentColorHex) ?: matchingTheme.accentColorHex,
             buttonColorHex = prefs.getString("button_color_hex", matchingTheme.buttonColorHex) ?: matchingTheme.buttonColorHex,
+            buttonClickedColorHex = prefs.getString("button_clicked_color_hex", matchingTheme.buttonClickedColorHex) ?: matchingTheme.buttonClickedColorHex,
             themePresetId = savedThemePresetId,
             dailyReminderEnabled = streakEnabled,
             reminderHour = sHour,
@@ -219,6 +251,7 @@ object UserSettingsManager {
             .putString("foreground_color_hex", settings.foregroundColorHex)
             .putString("accent_color_hex", settings.accentColorHex)
             .putString("button_color_hex", settings.buttonColorHex)
+            .putString("button_clicked_color_hex", settings.buttonClickedColorHex)
             .putString("theme_preset_id", settings.themePresetId)
             .putBoolean("achievement_alerts_enabled", settings.achievementAlertsEnabled)
             .putBoolean("weekly_insights_enabled", settings.weeklyInsightsEnabled)

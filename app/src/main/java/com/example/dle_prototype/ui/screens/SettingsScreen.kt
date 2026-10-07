@@ -90,6 +90,7 @@ import com.example.dle_prototype.data.AvatarThemePreset
 import com.example.dle_prototype.data.User
 import com.example.dle_prototype.data.UserSettings
 import com.example.dle_prototype.data.UserSettingsManager
+import com.example.dle_prototype.ui.components.CustomModelImporterCard
 import com.example.dle_prototype.notifications.DailyStreakReminderManager
 import com.example.dle_prototype.ui.theme.AmberAccent
 import com.example.dle_prototype.ui.theme.CyanAccent
@@ -925,6 +926,9 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                // Custom AI Model Importer Card (.gguf / .tflite File Picker)
+                CustomModelImporterCard()
             }
         }
     }

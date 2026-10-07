@@ -137,7 +137,7 @@ class SpacedRepetitionSchedulerTest {
         )
 
         assertNotNull(overview)
-        assertEquals(6, overview.prioritizedQueue.size)
+        assertEquals(SpacedRepetitionScheduler.CORE_TOPICS.size, overview.prioritizedQueue.size)
 
         // JavaScript should be ranked higher priority than CSS
         val jsIndex = overview.prioritizedQueue.indexOfFirst { it.topicName == "JavaScript" }

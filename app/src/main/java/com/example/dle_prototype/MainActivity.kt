@@ -27,6 +27,7 @@ import com.example.dle_prototype.ui.screens.DiagnosticsScreen
 import com.example.dle_prototype.ui.screens.FederatedLabScreen
 import com.example.dle_prototype.ui.screens.FlashcardReviewScreen
 import com.example.dle_prototype.ui.screens.FocusSessionScreen
+import com.example.dle_prototype.ui.screens.QaChatScreen
 import com.example.dle_prototype.ui.screens.QuizScreen
 import com.example.dle_prototype.ui.screens.SettingsScreen
 import com.example.dle_prototype.ui.screens.TrainingStudioScreen
@@ -47,6 +48,7 @@ sealed class Screen {
     data object FederatedLab : Screen()
     data object UxTestView : Screen()
     data object Settings : Screen()
+    data object QaChat : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -181,6 +183,9 @@ fun DleApp(
                         onOpenSettings = {
                             currentScreen = Screen.Settings
                         },
+                        onOpenQaChat = {
+                            currentScreen = Screen.QaChat
+                        },
                         onThemeSettingsChanged = onThemeSettingsChanged,
                         onLogout = {
                             currentUser = null
@@ -296,6 +301,19 @@ fun DleApp(
                 currentUser?.let { user ->
                     SettingsScreen(
                         user = user,
+                        onBack = {
+                            currentScreen = Screen.Dashboard
+                        }
+                    )
+                } ?: run {
+                    currentScreen = Screen.Auth
+                }
+            }
+            is Screen.QaChat -> {
+                currentUser?.let { user ->
+                    QaChatScreen(
+                        username = user.username,
+                        dbHelper = dbHelper,
                         onBack = {
                             currentScreen = Screen.Dashboard
                         }

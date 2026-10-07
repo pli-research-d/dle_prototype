@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -70,43 +71,20 @@ fun AppTrendyLogo(
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                CyanAccent.copy(alpha = glowAlpha),
-                                IndigoPrimaryLight.copy(alpha = glowAlpha * 0.5f),
+                                CyanAccent.copy(alpha = glowAlpha * 0.7f),
+                                IndigoPrimaryLight.copy(alpha = glowAlpha * 0.4f),
                                 Color.Transparent
                             ),
-                            radius = size.toPx() * 0.75f
+                            radius = size.toPx() * 0.85f
                         )
                     )
-                }
-                .clip(RoundedCornerShape(cornerRadius))
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF0F172A),
-                            Color(0xFF1E1B4B),
-                            Color(0xFF0B132B)
-                        )
-                    )
-                )
-                .border(
-                    BorderStroke(
-                        1.5.dp,
-                        Brush.linearGradient(
-                            colors = listOf(
-                                CyanAccent,
-                                IndigoPrimaryLight,
-                                RoseAccent.copy(alpha = 0.8f)
-                            )
-                        )
-                    ),
-                    RoundedCornerShape(cornerRadius)
-                ),
+                },
             contentAlignment = Alignment.Center
         ) {
             Image(
                 painter = painterResource(id = R.drawable.ic_pli_logo),
                 contentDescription = "PLi Brand Logo",
-                modifier = Modifier.size(size * 0.82f)
+                modifier = Modifier.fillMaxSize()
             )
         }
     }

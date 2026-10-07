@@ -3,6 +3,8 @@ package com.example.dle_prototype.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -10,6 +12,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -69,13 +73,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import com.example.dle_prototype.data.DatabaseHelper
 import com.example.dle_prototype.data.Question
 import com.example.dle_prototype.data.QuestionsRepository
@@ -143,6 +150,12 @@ fun QuizScreen(
     var showMistakesSheet by remember { mutableStateOf(false) }
     val sessionStartTime = remember { System.currentTimeMillis() }
     val missedQuestionsList = remember { mutableStateListOf<Question>() }
+
+    // Gesture control state: drag option left/right to highlight Guess/Certain (Confirm) button
+    var highlightedConfidence by remember { mutableStateOf<AnswerConfidence?>(null) }
+    var draggingOptionKey by remember { mutableStateOf<Any?>(null) }
+    val optionDragOffsetX = remember { Animatable(0f) }
+    val dragThresholdPx = 130f
 
     // Time-Pressure Countdown Challenge & Rocket Telemetry State
     val questionDurationSeconds = 25
@@ -336,6 +349,8 @@ fun QuizScreen(
             currentIndex++
             selectedAnswer = null
             lastSubmittedConfidence = null
+            highlightedConfidence = null
+            draggingOptionKey = null
             isAnswerSubmitted = false
             isTimedOut = false
             remainingSeconds = questionDurationSeconds
@@ -484,7 +499,7 @@ fun QuizScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = if (selectedAnswer == null) "Select an answer, then submit as Certain or Guessing:" else "✓ Response selected! Submit as Certain or Guessing:",
+                                    text = if (selectedAnswer == null) "Select an answer, then submit as Certain or Guessing" else "✓ Response selected! Submit as Certain or Guessing",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (selectedAnswer != null) CyanAccent else Color(0xFF94A3B8)
@@ -503,16 +518,23 @@ fun QuizScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                // 1. Certain Button (Certain + correct = reward, certain + incorrect = reduce level)
+                                // 1. Confirm / Certain Button (Certain + correct = reward, certain + incorrect = reduce level; Drag right to highlight & submit expected achievement score)
+                                val isCertainHighlighted = highlightedConfidence == AnswerConfidence.CERTAIN
                                 Button(
                                     onClick = { submitWithConfidence(AnswerConfidence.CERTAIN) },
                                     enabled = selectedAnswer != null,
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(54.dp)
-                                        .testTag("certain_button"),
+                                        .testTag("certain_button")
+                                        .testTag("confirm_button")
+                                        .border(
+                                            width = if (isCertainHighlighted) 2.5.dp else 0.dp,
+                                            color = if (isCertainHighlighted) Color.White else Color.Transparent,
+                                            shape = RoundedCornerShape(14.dp)
+                                        ),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = EmeraldSuccess,
+                                        containerColor = if (isCertainHighlighted) EmeraldSuccess.copy(alpha = 1f) else EmeraldSuccess,
                                         contentColor = Color.White,
                                         disabledContainerColor = EmeraldSuccess.copy(alpha = 0.25f),
                                         disabledContentColor = Color.White.copy(alpha = 0.4f)
@@ -531,12 +553,12 @@ fun QuizScreen(
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Text(
-                                                text = "Certain",
+                                                text = "Confirm",
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.Bold
                                             )
                                             Text(
-                                                text = "Reward Level",
+                                                text = "Expected Score",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontSize = 10.sp,
                                                 color = Color.White.copy(alpha = 0.85f)
@@ -545,16 +567,23 @@ fun QuizScreen(
                                     }
                                 }
 
-                                // 2. Guessing Button (Always reduces adaptive level)
+                                // 2. Guess / Guessing Button (Always reduces adaptive level; Drag left to highlight & submit low achievement score)
+                                val isGuessHighlighted = highlightedConfidence == AnswerConfidence.GUESSING
                                 Button(
                                     onClick = { submitWithConfidence(AnswerConfidence.GUESSING) },
                                     enabled = selectedAnswer != null,
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(54.dp)
-                                        .testTag("guessing_button"),
+                                        .testTag("guessing_button")
+                                        .testTag("guess_button")
+                                        .border(
+                                            width = if (isGuessHighlighted) 2.5.dp else 0.dp,
+                                            color = if (isGuessHighlighted) Color.White else Color.Transparent,
+                                            shape = RoundedCornerShape(14.dp)
+                                        ),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = AmberAccent,
+                                        containerColor = if (isGuessHighlighted) AmberAccent.copy(alpha = 1f) else AmberAccent,
                                         contentColor = Color.Black,
                                         disabledContainerColor = AmberAccent.copy(alpha = 0.25f),
                                         disabledContentColor = Color.Black.copy(alpha = 0.4f)
@@ -574,13 +603,13 @@ fun QuizScreen(
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Text(
-                                                text = "Guessing",
+                                                text = "Guess",
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color.Black
                                             )
                                             Text(
-                                                text = "Reduces Level",
+                                                text = "Low Score",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontSize = 10.sp,
                                                 color = Color.Black.copy(alpha = 0.75f)
@@ -854,6 +883,9 @@ fun QuizScreen(
                         val isCorrect = opt == currentQ.answer
                         val optionLetter = ('A' + idx).toString()
 
+                        val isDraggingThis = draggingOptionKey == opt
+                        val currentOffsetX = if (isDraggingThis) optionDragOffsetX.value else 0f
+
                         val borderColor = when {
                             !isAnswerSubmitted -> if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
                             isCorrect -> EmeraldSuccess
@@ -871,10 +903,63 @@ fun QuizScreen(
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .offset { IntOffset(currentOffsetX.roundToInt(), 0) }
                                 .clip(RoundedCornerShape(14.dp))
                                 .border(1.5.dp, borderColor, RoundedCornerShape(14.dp))
                                 .clickable(enabled = !isAnswerSubmitted) {
+                                    // Click only - selects answer, allows choosing Guess or Confirm button below
                                     selectedAnswer = opt
+                                    highlightedConfidence = null
+                                }
+                                .pointerInput(isAnswerSubmitted, opt) {
+                                    if (!isAnswerSubmitted) {
+                                        detectHorizontalDragGestures(
+                                            onDragStart = {
+                                                selectedAnswer = opt
+                                                draggingOptionKey = opt
+                                            },
+                                            onDragEnd = {
+                                                coroutineScope.launch {
+                                                    val finalOffset = optionDragOffsetX.value
+                                                    optionDragOffsetX.animateTo(0f, spring())
+                                                    draggingOptionKey = null
+                                                    when {
+                                                        finalOffset >= dragThresholdPx -> {
+                                                            // Dragged to the right -> Highlight Confirm and submit as expected achievement score
+                                                            highlightedConfidence = AnswerConfidence.CERTAIN
+                                                            submitWithConfidence(AnswerConfidence.CERTAIN)
+                                                        }
+                                                        finalOffset <= -dragThresholdPx -> {
+                                                            // Dragged to the left -> Highlight Guess and submit as low achievement score
+                                                            highlightedConfidence = AnswerConfidence.GUESSING
+                                                            submitWithConfidence(AnswerConfidence.GUESSING)
+                                                        }
+                                                        else -> {
+                                                            highlightedConfidence = null
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                coroutineScope.launch {
+                                                    optionDragOffsetX.animateTo(0f, spring())
+                                                    draggingOptionKey = null
+                                                    highlightedConfidence = null
+                                                }
+                                            },
+                                            onHorizontalDrag = { _, dragAmount ->
+                                                coroutineScope.launch {
+                                                    val newOffset = (optionDragOffsetX.value + dragAmount).coerceIn(-280f, 280f)
+                                                    optionDragOffsetX.snapTo(newOffset)
+                                                    highlightedConfidence = when {
+                                                        newOffset >= dragThresholdPx -> AnswerConfidence.CERTAIN // Drag right -> Confirm (Expected Score)
+                                                        newOffset <= -dragThresholdPx -> AnswerConfidence.GUESSING // Drag left -> Guess (Low Score)
+                                                        else -> null
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                                 .testTag("mcq_option_$idx"),
                             color = bgColor,
@@ -890,7 +975,7 @@ fun QuizScreen(
                                         .clip(CircleShape)
                                         .background(
                                             if (isAnswerSubmitted && isCorrect) EmeraldSuccess
-                                            else if (isAnswerSubmitted && isSelected) RoseAccent
+                                             else if (isAnswerSubmitted && isSelected) RoseAccent
                                             else MaterialTheme.colorScheme.surfaceVariant
                                         ),
                                     contentAlignment = Alignment.Center
@@ -909,6 +994,23 @@ fun QuizScreen(
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.weight(1f)
                                 )
+                                if (!isAnswerSubmitted && isSelected) {
+                                    Text(
+                                        text = when {
+                                            isDraggingThis && currentOffsetX > 40f -> "→ Confirm (Expected)"
+                                            isDraggingThis && currentOffsetX < -40f -> "← Guess (Low)"
+                                            else -> "⇄ Drag"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 10.sp,
+                                        color = when {
+                                            isDraggingThis && currentOffsetX > 40f -> EmeraldSuccess
+                                            isDraggingThis && currentOffsetX < -40f -> AmberAccent
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                        },
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
@@ -921,6 +1023,9 @@ fun QuizScreen(
                         listOf(true to "True", false to "False").forEach { (value, label) ->
                             val isSelected = selectedAnswer == value
                             val isCorrect = value == currentQ.answer
+
+                            val isDraggingThis = draggingOptionKey == value
+                            val currentOffsetX = if (isDraggingThis) optionDragOffsetX.value else 0f
 
                             val borderColor = when {
                                 !isAnswerSubmitted -> if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
@@ -939,10 +1044,63 @@ fun QuizScreen(
                             Surface(
                                 modifier = Modifier
                                     .weight(1f)
+                                    .offset { IntOffset(currentOffsetX.roundToInt(), 0) }
                                     .clip(RoundedCornerShape(14.dp))
                                     .border(1.5.dp, borderColor, RoundedCornerShape(14.dp))
                                     .clickable(enabled = !isAnswerSubmitted) {
+                                        // Click only - selects answer, allows choosing Guess or Confirm button below
                                         selectedAnswer = value
+                                        highlightedConfidence = null
+                                    }
+                                    .pointerInput(isAnswerSubmitted, value) {
+                                        if (!isAnswerSubmitted) {
+                                            detectHorizontalDragGestures(
+                                                onDragStart = {
+                                                    selectedAnswer = value
+                                                    draggingOptionKey = value
+                                                },
+                                                onDragEnd = {
+                                                    coroutineScope.launch {
+                                                        val finalOffset = optionDragOffsetX.value
+                                                        optionDragOffsetX.animateTo(0f, spring())
+                                                        draggingOptionKey = null
+                                                        when {
+                                                            finalOffset >= dragThresholdPx -> {
+                                                                // Dragged to the right -> Highlight Confirm and submit as expected achievement score
+                                                                highlightedConfidence = AnswerConfidence.CERTAIN
+                                                                submitWithConfidence(AnswerConfidence.CERTAIN)
+                                                            }
+                                                            finalOffset <= -dragThresholdPx -> {
+                                                                // Dragged to the left -> Highlight Guess and submit as low achievement score
+                                                                highlightedConfidence = AnswerConfidence.GUESSING
+                                                                submitWithConfidence(AnswerConfidence.GUESSING)
+                                                            }
+                                                            else -> {
+                                                                highlightedConfidence = null
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                onDragCancel = {
+                                                    coroutineScope.launch {
+                                                        optionDragOffsetX.animateTo(0f, spring())
+                                                        draggingOptionKey = null
+                                                        highlightedConfidence = null
+                                                    }
+                                                },
+                                                onHorizontalDrag = { _, dragAmount ->
+                                                    coroutineScope.launch {
+                                                        val newOffset = (optionDragOffsetX.value + dragAmount).coerceIn(-280f, 280f)
+                                                        optionDragOffsetX.snapTo(newOffset)
+                                                        highlightedConfidence = when {
+                                                            newOffset >= dragThresholdPx -> AnswerConfidence.CERTAIN // Drag right -> Confirm (Expected Score)
+                                                            newOffset <= -dragThresholdPx -> AnswerConfidence.GUESSING // Drag left -> Guess (Low Score)
+                                                            else -> null
+                                                        }
+                                                    }
+                                                }
+                                            )
+                                        }
                                     }
                                     .testTag("tf_option_$label"),
                                 color = bgColor,
@@ -965,6 +1123,24 @@ fun QuizScreen(
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
+                                    if (!isAnswerSubmitted && isSelected) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = when {
+                                                isDraggingThis && currentOffsetX > 40f -> "→ Confirm"
+                                                isDraggingThis && currentOffsetX < -40f -> "← Guess"
+                                                else -> "⇄ Drag"
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontSize = 9.sp,
+                                            color = when {
+                                                isDraggingThis && currentOffsetX > 40f -> EmeraldSuccess
+                                                isDraggingThis && currentOffsetX < -40f -> AmberAccent
+                                                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                            },
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1116,7 +1292,7 @@ fun QuizScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = if (selectedAnswer == null) "Select an answer above, then submit as Certain or Guessing:" else "✓ Response selected! Submit as Certain or Guessing:",
+                            text = if (selectedAnswer == null) "Select an answer, then submit as Certain or Guessing" else "✓ Response selected! Submit as Certain or Guessing",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = if (selectedAnswer != null) FontWeight.Bold else FontWeight.Normal,
                             color = if (selectedAnswer != null) CyanAccent else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1127,16 +1303,23 @@ fun QuizScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // 1. Certain Button (Certain + correct = reward, certain + incorrect = reduce level)
+                            // 1. Confirm / Certain Button (Certain + correct = reward, certain + incorrect = reduce level; Drag right to highlight & submit expected achievement score)
+                            val isCertainInlineHighlighted = highlightedConfidence == AnswerConfidence.CERTAIN
                             Button(
                                 onClick = { submitWithConfidence(AnswerConfidence.CERTAIN) },
                                 enabled = selectedAnswer != null,
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(56.dp)
-                                    .testTag("inline_certain_button"),
+                                    .testTag("inline_certain_button")
+                                    .testTag("inline_confirm_button")
+                                    .border(
+                                        width = if (isCertainInlineHighlighted) 2.5.dp else 0.dp,
+                                        color = if (isCertainInlineHighlighted) Color.White else Color.Transparent,
+                                        shape = RoundedCornerShape(14.dp)
+                                    ),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = EmeraldSuccess,
+                                    containerColor = if (isCertainInlineHighlighted) EmeraldSuccess.copy(alpha = 1f) else EmeraldSuccess,
                                     contentColor = Color.White,
                                     disabledContainerColor = EmeraldSuccess.copy(alpha = 0.3f),
                                     disabledContentColor = Color.White.copy(alpha = 0.5f)
@@ -1155,12 +1338,12 @@ fun QuizScreen(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
-                                            text = "Certain",
+                                            text = "Confirm",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            text = "Reward Level",
+                                            text = "Expected Score",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontSize = 10.sp,
                                             color = Color.White.copy(alpha = 0.85f)
@@ -1169,16 +1352,23 @@ fun QuizScreen(
                                 }
                             }
 
-                            // 2. Guessing Button (Always reduces adaptive level)
+                            // 2. Guess / Guessing Button (Always reduces adaptive level; Drag left to highlight & submit low achievement score)
+                            val isGuessInlineHighlighted = highlightedConfidence == AnswerConfidence.GUESSING
                             Button(
                                 onClick = { submitWithConfidence(AnswerConfidence.GUESSING) },
                                 enabled = selectedAnswer != null,
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(56.dp)
-                                    .testTag("inline_guessing_button"),
+                                    .testTag("inline_guessing_button")
+                                    .testTag("inline_guess_button")
+                                    .border(
+                                        width = if (isGuessInlineHighlighted) 2.5.dp else 0.dp,
+                                        color = if (isGuessInlineHighlighted) Color.White else Color.Transparent,
+                                        shape = RoundedCornerShape(14.dp)
+                                    ),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = AmberAccent,
+                                    containerColor = if (isGuessInlineHighlighted) AmberAccent.copy(alpha = 1f) else AmberAccent,
                                     contentColor = Color.Black,
                                     disabledContainerColor = AmberAccent.copy(alpha = 0.3f),
                                     disabledContentColor = Color.Black.copy(alpha = 0.5f)
@@ -1198,13 +1388,13 @@ fun QuizScreen(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(
-                                            text = "Guessing",
+                                            text = "Guess",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.Black
                                         )
                                         Text(
-                                            text = "Reduces Level",
+                                            text = "Low Score",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontSize = 10.sp,
                                             color = Color.Black.copy(alpha = 0.75f)

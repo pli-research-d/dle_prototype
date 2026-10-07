@@ -68,6 +68,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.dle_prototype.ui.components.CustomModelImporterCard
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -357,6 +358,15 @@ fun TrainingStudioScreen(
                     }
                 }
             }
+
+            // Custom Model Importer (.gguf / .tflite File Picker)
+            CustomModelImporterCard(
+                onModelChanged = { _ ->
+                    coroutineScope.launch {
+                        refreshData()
+                    }
+                }
+            )
 
             // Resumable Checkpoint Card (Crash & App Restart Recovery)
             activeCheckpoint?.let { cp ->

@@ -17,7 +17,8 @@ object QuestionsRepository {
         CategoryInfo(3, "JavaScript", "Interactivity, events & logic", "⚡"),
         CategoryInfo(4, "PHP", "Server-side scripting & templates", "🐘"),
         CategoryInfo(5, "MySQL", "Relational data & query syntax", "🐬"),
-        CategoryInfo(6, "Python", "Syntax, data structures & algorithms", "🐍")
+        CategoryInfo(6, "Python", "Syntax, data structures & algorithms", "🐍"),
+        CategoryInfo(7, "C Language", "Memory management, pointers, structs & systems programming", "⚙️")
     )
 
     data class CategoryInfo(

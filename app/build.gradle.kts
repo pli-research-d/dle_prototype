@@ -71,6 +71,7 @@ dependencies {
     implementation(libs.tensorflow.lite)
     implementation("commons-io:commons-io:2.15.1")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation("io.coil-kt:coil-compose:2.7.0")
 
     testImplementation(libs.junit)
 }

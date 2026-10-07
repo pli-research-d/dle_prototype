@@ -28,10 +28,12 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Button
@@ -91,6 +93,7 @@ fun MainDashboardView(
     onOpenFocus: () -> Unit = {},
     onUpdateTargetHours: (Float) -> Unit = {},
     onOpenSummarizer: () -> Unit = {},
+    onOpenQaChat: () -> Unit = {},
     peakAnalysis: com.example.dle_prototype.data.ml.PeakLearningHoursAnalysis? = null,
     spacedRepetitionOverview: com.example.dle_prototype.data.ml.SpacedRepetitionOverview? = null,
     modifier: Modifier = Modifier
@@ -146,6 +149,7 @@ fun MainDashboardView(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
+                        modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -158,21 +162,27 @@ fun MainDashboardView(
                                 Text("🚀", fontSize = 24.sp)
                             }
                         }
-                        Column {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
                             Text(
-                                text = "Welcome back, You!",
+                                text = "Welcome, ${user.username}!",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Black,
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "Learning Engine Active · On-Track",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = EmeraldSuccess,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     // Level Chip
                     Surface(
@@ -329,7 +339,11 @@ fun MainDashboardView(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
@@ -340,9 +354,12 @@ fun MainDashboardView(
                                 text = if (dailyGoalProgress.isAchieved) "Today's Target Reached! 🎉" else "Daily Target: ${dailyGoalProgress.answeredToday}/${dailyGoalProgress.targetQuestions} questions",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "${dailyGoalProgress.percentComplete.toInt()}%",
                             fontSize = 12.sp,
@@ -506,7 +523,11 @@ fun MainDashboardView(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Icon(
                             Icons.Default.Shield,
                             contentDescription = null,
@@ -516,9 +537,12 @@ fun MainDashboardView(
                         Text(
                             text = "Streak Freeze Active (1 protection remaining)",
                             fontSize = 11.sp,
-                            color = Color(0xFFCBD5E1)
+                            color = Color(0xFFCBD5E1),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Protected",
                         fontSize = 10.sp,
@@ -540,79 +564,183 @@ fun MainDashboardView(
         )
 
         // =====================================================================
-        // SECTION 2C: ON-DEVICE AI SUMMARIZER TOOL CARD
+        // SECTION 2C: ON-DEVICE AI STUDY TOOLS (Summarizer & QA Tutor)
         // =====================================================================
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = Color(0xFF0F172A),
-            border = BorderStroke(1.dp, CyanAccent.copy(alpha = 0.4f)),
+            border = BorderStroke(1.dp, Color(0xFF1E2E4A)),
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onOpenSummarizer() }
-                .testTag("dashboard_summarizer_card")
+                .testTag("dashboard_ai_tools_section")
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = CyanAccent.copy(alpha = 0.15f),
-                        modifier = Modifier.size(42.dp)
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.AutoAwesome,
-                                contentDescription = "AI Summarizer",
-                                tint = CyanAccent,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(
-                                text = "AI Concept Summarizer",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = EmeraldSuccess.copy(alpha = 0.15f)
-                            ) {
-                                Text(
-                                    text = "TFLite",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = EmeraldSuccess,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = CyanAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
                         Text(
-                            text = "Compress articles & study text into high-impact bullet points",
+                            text = "ON-DEVICE AI STUDY TOOLS",
                             fontSize = 11.sp,
-                            color = Color(0xFF94A3B8)
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace,
+                            color = Color(0xFF94A3B8),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = EmeraldSuccess.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "TFLite · Offline",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = EmeraldSuccess,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
 
-                Button(
-                    onClick = onOpenSummarizer,
-                    colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    modifier = Modifier.testTag("launch_summarizer_button")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Summarize", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                    // Tool 1: AI Concept Summarizer
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF131D31),
+                        border = BorderStroke(1.dp, CyanAccent.copy(alpha = 0.35f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onOpenSummarizer() }
+                            .testTag("dashboard_summarizer_card")
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = CyanAccent.copy(alpha = 0.15f),
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.AutoAwesome,
+                                            contentDescription = "AI Summarizer",
+                                            tint = CyanAccent,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    tint = CyanAccent,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "Summarizer",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "Bullet notes & MCQs",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+
+                    // Tool 2: AI Study Tutor (Q&A)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF131D31),
+                        border = BorderStroke(1.dp, Color(0xFF6366F1).copy(alpha = 0.35f)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onOpenQaChat() }
+                            .testTag("dashboard_qa_chat_card")
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFF6366F1).copy(alpha = 0.15f),
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.SmartToy,
+                                            contentDescription = "AI Study Tutor",
+                                            tint = Color(0xFF818CF8),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = null,
+                                    tint = Color(0xFF818CF8),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "AI Study Tutor",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "YOLO11n, OCR & QA",
+                                    fontSize = 10.sp,
+                                    color = Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.DeviceHub
@@ -29,7 +30,6 @@ import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.ModelTraining
 import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Button
@@ -92,7 +92,7 @@ fun CombinedVisualHub(
 
     val segments = listOf(
         Triple("Trait Radar", Icons.Default.Psychology, 0),
-        Triple("Loss Curves", Icons.Default.ShowChart, 1),
+        Triple("Loss Curves", Icons.AutoMirrored.Filled.ShowChart, 1),
         Triple("Hardware Latency", Icons.Default.Speed, 2),
         Triple("Logs & Checkpoints", Icons.Default.Timeline, 3)
     )

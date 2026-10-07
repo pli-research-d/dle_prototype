@@ -1,5 +1,6 @@
 package com.example.dle_prototype.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -17,6 +18,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.dle_prototype.ui.navigation.AppRoute
 import com.example.dle_prototype.ui.navigation.BottomNavigationBar
 import com.example.dle_prototype.ui.components.ThemeCustomizerDialog
+import com.example.dle_prototype.ui.components.VisualKnowledgeGraphComponent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,6 +64,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SportsKabaddi
 import androidx.compose.material.icons.filled.CardGiftcard
@@ -106,6 +109,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.dle_prototype.data.DailyGoalProgress
@@ -184,6 +188,7 @@ fun DashboardScreen(
     onOpenFederated: () -> Unit = {},
     onOpenUxTest: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onOpenQaChat: () -> Unit = {},
     onThemeSettingsChanged: (com.example.dle_prototype.data.UserSettings) -> Unit = {},
     onLogout: () -> Unit,
     tabNavController: NavHostController = rememberNavController(),
@@ -392,6 +397,7 @@ fun DashboardScreen(
                     activeModules = activeModules,
                     onStartQuiz = onStartQuiz,
                     onOpenFocus = onOpenFocus,
+                    onOpenQaChat = onOpenQaChat,
                     onUpdateTargetHours = { newHours ->
                         coroutineScope.launch {
                             dailyGoalProgress = dbHelper.setDailyTargetHours(user.username, newHours)
@@ -461,6 +467,8 @@ fun DashboardScreen(
                         }
                     },
                     onStartQuiz = { onStartQuiz("JavaScript", 3f) },
+                    onStartQuizWithCategory = onStartQuiz,
+                    onOpenQaChat = onOpenQaChat,
                     focusSessions = focusSessions,
                     digitalBadges = digitalBadges,
                     onOpenExport = { showExportDialog = true }
@@ -488,7 +496,8 @@ fun DashboardScreen(
                     latencySnapshot = latencySnapshot,
                     onClearCache = { showClearConfirm = true },
                     onLogout = onLogout,
-                    onOpenExport = { showExportDialog = true }
+                    onOpenExport = { showExportDialog = true },
+                    onOpenQaChat = onOpenQaChat
                 )
             }
         }
@@ -600,17 +609,21 @@ fun HomeTabView(
                     )
                 }
 
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         text = userSettings.displayName.ifBlank { user.username },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFF8FAFC)
+                        color = Color(0xFFF8FAFC),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "Ready for today's mission?",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF94A3B8)
+                        color = Color(0xFF94A3B8),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -847,10 +860,15 @@ fun LearnTabView(
     activeModules: List<LearningModule> = emptyList(),
     onStartQuiz: (categoryName: String, categoryNumber: Float) -> Unit,
     onOpenFocus: () -> Unit = {},
+    onOpenQaChat: () -> Unit = {},
     onUpdateTargetHours: (Float) -> Unit = {},
     spacedRepetitionOverview: com.example.dle_prototype.data.ml.SpacedRepetitionOverview? = null
 ) {
-    var selectedSegment by remember { mutableIntStateOf(0) } // 0 = Dashboard, 1 = Quiz, 2 = Flashcards, 3 = Focus
+    var selectedSegment by remember { mutableIntStateOf(0) } // 0 = Dashboard, 1 = Quiz, 2 = Flashcards, 3 = Focus, 4 = Summarizer, 5 = QA Chat
+
+    BackHandler(enabled = selectedSegment != 0) {
+        selectedSegment = 0
+    }
 
     Column(
         modifier = Modifier
@@ -858,68 +876,77 @@ fun LearnTabView(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Top Segmented Control: [ Dashboard ] | [ Quiz ] | [ Flashcards ] | [ Focus ]
+        // Top Segmented Control: [ Dashboard ] | [ Quiz ] | [ Flashcards ] | [ Focus ] | [ Summary ]
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(46.dp)
                 .clip(RoundedCornerShape(14.dp)),
             color = Color(0xFF0F172A),
             border = BorderStroke(1.dp, Color(0xFF1E293B))
         ) {
-            Row(modifier = Modifier.fillMaxSize().padding(4.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 0: Dashboard
                 Box(
                     modifier = Modifier
-                        .weight(1f)
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (selectedSegment == 0) CyanAccent.copy(alpha = 0.2f) else Color.Transparent)
                         .clickable { selectedSegment = 0 }
-                        .padding(vertical = 8.dp),
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Dashboard",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (selectedSegment == 0) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selectedSegment == 0) CyanAccent else Color(0xFF94A3B8)
+                        color = if (selectedSegment == 0) CyanAccent else Color(0xFF94A3B8),
+                        maxLines = 1
                     )
                 }
 
+                // 1: Quiz
                 Box(
                     modifier = Modifier
-                        .weight(1f)
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (selectedSegment == 1) CyanAccent.copy(alpha = 0.2f) else Color.Transparent)
                         .clickable { selectedSegment = 1 }
-                        .padding(vertical = 8.dp),
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Quiz",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (selectedSegment == 1) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selectedSegment == 1) CyanAccent else Color(0xFF94A3B8)
+                        color = if (selectedSegment == 1) CyanAccent else Color(0xFF94A3B8),
+                        maxLines = 1
                     )
                 }
 
+                // 2: Flashcards
                 Box(
                     modifier = Modifier
-                        .weight(1.1f)
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (selectedSegment == 2) CyanAccent.copy(alpha = 0.2f) else Color.Transparent)
                         .clickable { selectedSegment = 2 }
-                        .padding(vertical = 8.dp),
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Text(
                             text = "Flashcards",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = if (selectedSegment == 2) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selectedSegment == 2) CyanAccent else Color(0xFF94A3B8)
+                            color = if (selectedSegment == 2) CyanAccent else Color(0xFF94A3B8),
+                            maxLines = 1
                         )
                         if (dueCardsCount > 0) {
                             Surface(
@@ -938,37 +965,57 @@ fun LearnTabView(
                     }
                 }
 
+                // 3: Focus
                 Box(
                     modifier = Modifier
-                        .weight(0.9f)
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (selectedSegment == 3) CyanAccent.copy(alpha = 0.2f) else Color.Transparent)
                         .clickable { selectedSegment = 3 }
-                        .padding(vertical = 8.dp),
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Focus",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (selectedSegment == 3) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selectedSegment == 3) CyanAccent else Color(0xFF94A3B8)
+                        color = if (selectedSegment == 3) CyanAccent else Color(0xFF94A3B8),
+                        maxLines = 1
                     )
                 }
 
+                // 4: Summary
                 Box(
                     modifier = Modifier
-                        .weight(1.0f)
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (selectedSegment == 4) CyanAccent.copy(alpha = 0.2f) else Color.Transparent)
                         .clickable { selectedSegment = 4 }
-                        .padding(vertical = 8.dp),
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Summary",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (selectedSegment == 4) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selectedSegment == 4) CyanAccent else Color(0xFF94A3B8)
+                        color = if (selectedSegment == 4) CyanAccent else Color(0xFF94A3B8),
+                        maxLines = 1
+                    )
+                }
+
+                // 5: AI Tutor
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (selectedSegment == 5) Color(0xFF818CF8).copy(alpha = 0.2f) else Color.Transparent)
+                        .clickable { selectedSegment = 5 }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "AI Tutor 🤖",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (selectedSegment == 5) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selectedSegment == 5) Color(0xFF818CF8) else Color(0xFF94A3B8),
+                        maxLines = 1
                     )
                 }
             }
@@ -994,7 +1041,17 @@ fun LearnTabView(
                     onOpenFocus = onOpenFocus,
                     onUpdateTargetHours = onUpdateTargetHours,
                     onOpenSummarizer = { selectedSegment = 4 },
+                    onOpenQaChat = { selectedSegment = 5 },
                     spacedRepetitionOverview = spacedRepetitionOverview
+                )
+            }
+
+            5 -> {
+                // Cognitive AI Study Tutor (Q&A Chat)
+                QaChatScreen(
+                    username = user.username,
+                    dbHelper = dbHelper,
+                    onBack = { selectedSegment = 0 }
                 )
             }
 
@@ -1073,7 +1130,9 @@ fun LearnTabView(
                                     text = cat.name,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFF8FAFC)
+                                    color = Color(0xFFF8FAFC),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
 
                                 Text(
@@ -1081,6 +1140,7 @@ fun LearnTabView(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFF94A3B8),
                                     maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
                                     lineHeight = 15.sp
                                 )
                             }
@@ -1365,11 +1425,17 @@ fun ProgressTabView(
     onToggleFriend: (String) -> Unit,
     onAddFriendByName: (String) -> Unit,
     onStartQuiz: () -> Unit,
+    onStartQuizWithCategory: ((categoryName: String, categoryNumber: Float) -> Unit)? = null,
+    onOpenQaChat: (() -> Unit)? = null,
     focusSessions: List<StudySessionRecord>,
     digitalBadges: List<com.example.dle_prototype.data.badges.DigitalBadge> = emptyList(),
     onOpenExport: (() -> Unit)? = null
 ) {
-    var selectedSegment by remember { mutableIntStateOf(0) } // 0=Overview, 1=History, 2=Achievements, 3=Leaderboard
+    var selectedSegment by remember { mutableIntStateOf(0) } // 0=Overview, 1=Knowledge Graph, 2=History, 3=Achievements, 4=Weekly Recap
+
+    BackHandler(enabled = selectedSegment != 0) {
+        selectedSegment = 0
+    }
 
     Column(
         modifier = Modifier
@@ -1413,33 +1479,39 @@ fun ProgressTabView(
             }
         }
 
-        // Top Segmented Control: [ Overview ] | [ History ] | [ Achievements ] | [ Leaderboard ]
+        // Top Segmented Control: [ Overview ] | [ Graph ] | [ History ] | [ Badges ] | [ Ranks ]
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp)
                 .clip(RoundedCornerShape(12.dp)),
             color = Color(0xFF0F172A),
             border = BorderStroke(1.dp, Color(0xFF1E293B))
         ) {
-            Row(modifier = Modifier.fillMaxSize().padding(3.dp)) {
-                val segments = listOf("Overview", "History", "Badges", "Ranks")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val segments = listOf("Overview", "Knowledge Graph 🌐", "Quiz History", "Badges", "Rankings")
                 segments.forEachIndexed { idx, label ->
                     val isSel = selectedSegment == idx
                     Box(
                         modifier = Modifier
-                            .weight(1f)
                             .clip(RoundedCornerShape(9.dp))
                             .background(if (isSel) CyanAccent.copy(alpha = 0.2f) else Color.Transparent)
                             .clickable { selectedSegment = idx }
-                            .padding(vertical = 7.dp),
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = label,
                             fontSize = 11.sp,
                             fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSel) CyanAccent else Color(0xFF94A3B8)
+                            color = if (isSel) CyanAccent else Color(0xFF94A3B8),
+                            maxLines = 1
                         )
                     }
                 }
@@ -1455,9 +1527,29 @@ fun ProgressTabView(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+
+                // Visual Knowledge Graph integrated in Overview
+                VisualKnowledgeGraphComponent(
+                    username = user.username,
+                    dbHelper = dbHelper,
+                    modifier = Modifier.fillMaxWidth(),
+                    onStartQuiz = onStartQuizWithCategory,
+                    onOpenQaChat = onOpenQaChat
+                )
             }
 
             1 -> {
+                // [ Knowledge Graph ] Dedicated Full Graph View
+                VisualKnowledgeGraphComponent(
+                    username = user.username,
+                    dbHelper = dbHelper,
+                    modifier = Modifier.fillMaxWidth(),
+                    onStartQuiz = onStartQuizWithCategory,
+                    onOpenQaChat = onOpenQaChat
+                )
+            }
+
+            2 -> {
                 // [ History ] Quiz attempts list
                 QuizHistorySection(
                     attempts = recentAttempts,
@@ -1467,7 +1559,7 @@ fun ProgressTabView(
                 )
             }
 
-            2 -> {
+            3 -> {
                 // [ Achievements ] Badge grid
                 AchievementsSection(
                     stats = quizPerformanceStats,
@@ -1476,7 +1568,7 @@ fun ProgressTabView(
                 )
             }
 
-            3 -> {
+            4 -> {
                 // [ Weekly Recap ]
                 WeeklyRecapCard(
                     username = user.username,
@@ -1574,7 +1666,8 @@ fun ProfileTabView(
     latencySnapshot: InferenceLatencySnapshot?,
     onClearCache: () -> Unit,
     onLogout: () -> Unit,
-    onOpenExport: (() -> Unit)? = null
+    onOpenExport: (() -> Unit)? = null,
+    onOpenQaChat: () -> Unit = {}
 ) {
     var isDevModeExpanded by remember { mutableStateOf(false) }
     var showRewardsHub by remember { mutableStateOf(false) }
@@ -1614,18 +1707,24 @@ fun ProfileTabView(
                         text = userSettings.displayName.ifBlank { user.username },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFF8FAFC)
+                        color = Color(0xFFF8FAFC),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "@${user.username} • Sync: SQLite Local",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF94A3B8)
+                        color = Color(0xFF94A3B8),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     val memberSince = SimpleDateFormat("MMM yyyy", Locale.US).format(Date(user.createdAt))
                     Text(
                         text = "Member since $memberSince",
                         fontSize = 11.sp,
-                        color = Color(0xFF64748B)
+                        color = Color(0xFF64748B),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -1934,6 +2033,40 @@ fun ProfileTabView(
                             }
                         }
                         Text("Export →", color = EmeraldSuccess, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // AI Study Tutor Q&A Shortcut
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF090E1A),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenQaChat() }
+                        .padding(12.dp)
+                        .testTag("qa_chat_tool_card")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF6366F1).copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.SmartToy, contentDescription = null, tint = Color(0xFF818CF8), modifier = Modifier.size(20.dp))
+                            }
+                            Column {
+                                Text("AI Study Tutor (Q&A)", fontWeight = FontWeight.Bold, color = Color(0xFFF8FAFC))
+                                Text("Ask questions grounded in curriculum & personal stats", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                            }
+                        }
+                        Text("Chat →", color = Color(0xFF818CF8), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

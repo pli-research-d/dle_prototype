@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -154,11 +155,14 @@ fun BottomNavigationBar(
                         modifier = Modifier.size(22.dp)
                     )
                 },
+                alwaysShowLabel = true,
                 label = {
                     Text(
                         text = tab.title,
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 colors = NavigationBarItemDefaults.colors(
@@ -194,6 +198,7 @@ fun AppNavigation(
     onOpenFederated: () -> Unit = {},
     onOpenUxTest: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    onOpenQaChat: () -> Unit = {},
     onLogout: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -330,7 +335,8 @@ fun AppNavigation(
                     recentAttempts = recentAttempts,
                     dueCardsCount = dueCardsCount,
                     onStartQuiz = onStartQuiz,
-                    onOpenFocus = onOpenFocus
+                    onOpenFocus = onOpenFocus,
+                    onOpenQaChat = onOpenQaChat
                 )
             }
 
@@ -411,7 +417,8 @@ fun AppNavigation(
                     onOpenUxTest = onOpenUxTest,
                     latencySnapshot = latencySnapshot,
                     onClearCache = {},
-                    onLogout = onLogout
+                    onLogout = onLogout,
+                    onOpenQaChat = onOpenQaChat
                 )
             }
         }

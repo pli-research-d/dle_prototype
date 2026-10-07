@@ -19,11 +19,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.RocketLaunch
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -134,7 +134,7 @@ fun RewardMomentsOverlay(
                         }
                         is RewardMomentType.MultiplierChange -> {
                             Icon(
-                                Icons.Default.TrendingUp,
+                                Icons.AutoMirrored.Filled.TrendingUp,
                                 contentDescription = null,
                                 tint = CyanAccent,
                                 modifier = Modifier.size(28.dp)

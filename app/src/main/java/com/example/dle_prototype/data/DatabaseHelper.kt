@@ -20,6 +20,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import com.example.dle_prototype.data.ml.AdaptiveDifficultyProfile
+import com.example.dle_prototype.data.qa.QaChatMessage
 
 class DatabaseHelper private constructor(context: Context) :
     SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, DATABASE_VERSION) {
@@ -390,6 +391,18 @@ class DatabaseHelper private constructor(context: Context) :
 
         db.execSQL(
             """
+            CREATE TABLE IF NOT EXISTS qa_chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                sender TEXT NOT NULL,
+                message TEXT NOT NULL,
+                timestamp INTEGER NOT NULL
+            );
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
             CREATE TABLE IF NOT EXISTS training_checkpoints (
                 username TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
@@ -635,7 +648,19 @@ class DatabaseHelper private constructor(context: Context) :
             """.trimIndent()
         )
         try {
-            db.execSQL("ALTER TABLE daily_goals ADD COLUMN target_hours REAL NOT NULL DEFAULT 1.0;")
+            var hasTargetHours = false
+            db.rawQuery("PRAGMA table_info(daily_goals);", null).use { cursor ->
+                val nameIndex = cursor.getColumnIndex("name")
+                while (cursor.moveToNext()) {
+                    if (nameIndex != -1 && cursor.getString(nameIndex).equals("target_hours", ignoreCase = true)) {
+                        hasTargetHours = true
+                        break
+                    }
+                }
+            }
+            if (!hasTargetHours) {
+                db.execSQL("ALTER TABLE daily_goals ADD COLUMN target_hours REAL NOT NULL DEFAULT 1.0;")
+            }
         } catch (_: Exception) {}
     }
 
@@ -1170,6 +1195,22 @@ class DatabaseHelper private constructor(context: Context) :
                 difficulty = "Beginner",
                 status = ModuleStatus.IN_PROGRESS,
                 estimatedTimeMinutes = 10
+            ),
+            LearningModule(
+                id = "mod_c_systems",
+                categoryName = "C Language",
+                categoryNumber = 7f,
+                title = "C Systems & Memory Architecture",
+                description = "Pointers, dynamic heap allocation, struct padding, POSIX signals & low-level memory control",
+                icon = "⚙️",
+                tag = "Systems Architecture",
+                totalLessons = 20,
+                completedLessons = ((masteryMap["C Language"]?.totalAttempts ?: 0) * 2 + 3).coerceIn(3, 20),
+                progressPercent = (((masteryMap["C Language"]?.totalAttempts ?: 0) * 2 + 3).toFloat() / 20f * 100f).coerceIn(15f, 100f),
+                currentTopic = "Pointers, Dangling References & Heap Allocation",
+                difficulty = "Advanced",
+                status = if ((masteryMap["C Language"]?.accuracyPercent ?: 0f) < 60f && (masteryMap["C Language"]?.totalAttempts ?: 0) > 0) ModuleStatus.REVIEW_DUE else ModuleStatus.IN_PROGRESS,
+                estimatedTimeMinutes = 15
             )
         )
         moduleDefinitions
@@ -3527,6 +3568,74 @@ class DatabaseHelper private constructor(context: Context) :
         writableDatabase.delete("user_streaks", "username = ?", arrayOf(username))
         val rows = writableDatabase.delete(TABLE_STREAK_DATA, "$COL_STREAK_USERNAME = ?", arrayOf(username))
         rows > 0
+    }
+
+    // -------------------------------------------------------------
+    // QA STUDY CHAT PERSISTENCE METHODS
+    // -------------------------------------------------------------
+    suspend fun insertQaChatMessage(
+        username: String,
+        sender: String,
+        message: String,
+        timestamp: Long = System.currentTimeMillis()
+    ): Long = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put("username", username)
+            put("sender", sender)
+            put("message", message)
+            put("timestamp", timestamp)
+        }
+        writableDatabase.insert("qa_chat_messages", null, values)
+    }
+
+    suspend fun getQaChatHistory(
+        username: String,
+        limit: Int = 100
+    ): List<QaChatMessage> = withContext(Dispatchers.IO) {
+        val messages = mutableListOf<QaChatMessage>()
+        readableDatabase.rawQuery(
+            """
+            SELECT id, username, sender, message, timestamp
+            FROM qa_chat_messages
+            WHERE username = ?
+            ORDER BY timestamp ASC, id ASC
+            LIMIT ?
+            """.trimIndent(),
+            arrayOf(username, limit.toString())
+        ).use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow("id")
+            val userCol = cursor.getColumnIndexOrThrow("username")
+            val senderCol = cursor.getColumnIndexOrThrow("sender")
+            val msgCol = cursor.getColumnIndexOrThrow("message")
+            val timeCol = cursor.getColumnIndexOrThrow("timestamp")
+
+            while (cursor.moveToNext()) {
+                messages.add(
+                    QaChatMessage(
+                        id = cursor.getLong(idCol),
+                        username = cursor.getString(userCol),
+                        sender = cursor.getString(senderCol),
+                        message = cursor.getString(msgCol),
+                        timestamp = cursor.getLong(timeCol)
+                    )
+                )
+            }
+        }
+        messages
+    }
+
+    suspend fun clearQaChatHistory(username: String): Boolean = withContext(Dispatchers.IO) {
+        val rows = writableDatabase.delete("qa_chat_messages", "username = ?", arrayOf(username))
+        rows > 0
+    }
+
+    suspend fun getQaChatMessageCount(username: String): Int = withContext(Dispatchers.IO) {
+        readableDatabase.rawQuery(
+            "SELECT COUNT(*) FROM qa_chat_messages WHERE username = ?",
+            arrayOf(username)
+        ).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
+        }
     }
 }
 

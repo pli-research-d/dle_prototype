@@ -74,7 +74,8 @@ object SpacedRepetitionScheduler {
         TopicMeta("HTML", 1f, "🌐", "Semantic structure, modern HTML5, DOM architecture & accessibility"),
         TopicMeta("CSS", 2f, "🎨", "CSS Grid, Flexbox, layout systems, animations & responsive rules"),
         TopicMeta("MySQL", 5f, "🐬", "Relational querying, indexing, transactions, joins & DB design"),
-        TopicMeta("PHP", 4f, "🐘", "Server-side web scripting, request lifecycle & templates")
+        TopicMeta("PHP", 4f, "🐘", "Server-side web scripting, request lifecycle & templates"),
+        TopicMeta("C Language", 7f, "⚙️", "Memory management, pointers, manual heap allocation & struct padding")
     )
 
     /**

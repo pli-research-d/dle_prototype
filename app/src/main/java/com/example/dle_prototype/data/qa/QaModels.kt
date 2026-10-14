@@ -32,5 +32,9 @@ data class QaResponse(
     val category: String,
     val confidence: Float,
     val codeSnippet: String? = null,
-    val suggestedFollowUps: List<String> = emptyList()
+    val suggestedFollowUps: List<String> = emptyList(),
+    val isPersonalized: Boolean = false,
+    val extractedTopics: List<String> = emptyList(),
+    val motivationalPill: String? = null,
+    val traitConditioningSummary: String? = null
 )

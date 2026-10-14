@@ -37,11 +37,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
+import com.example.dle_prototype.data.DatabaseHelper
+import com.example.dle_prototype.data.graph.KnowledgeExpertBadgeStatus
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Vibration
@@ -123,6 +125,12 @@ fun SettingsScreen(
 
     var isDisplayNameChanged by remember(editDisplayName, settings.displayName) {
         mutableStateOf(editDisplayName.trim() != settings.displayName.trim() && editDisplayName.isNotBlank())
+    }
+
+    val dbHelper = remember { DatabaseHelper.getInstance(context) }
+    var expertBadgeStatuses by remember { mutableStateOf<List<KnowledgeExpertBadgeStatus>>(emptyList()) }
+    LaunchedEffect(user.username, settings.avatarEmoji) {
+        expertBadgeStatuses = dbHelper.checkAndAwardKnowledgeMasteryBadges(user.username, settings.avatarEmoji)
     }
 
     // Permission launcher for Android 13+
@@ -408,6 +416,94 @@ fun SettingsScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(text = emoji, fontSize = 20.sp)
+                                    }
+                                }
+                            }
+
+                            // Knowledge Graph Expert Mastery Icons
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Hub,
+                                        contentDescription = null,
+                                        tint = CyanAccent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Knowledge Graph Expert Avatars (${expertBadgeStatuses.count { it.isUnlocked }}/${expertBadgeStatuses.size.coerceAtLeast(1)} Unlocked)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = CyanAccent,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    expertBadgeStatuses.forEach { badge ->
+                                        val def = badge.definition
+                                        val isSelected = settings.avatarEmoji == def.unlockedIconEmoji
+                                        val isUnlocked = badge.isUnlocked
+
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = when {
+                                                isSelected -> def.accentColor.copy(alpha = 0.25f)
+                                                isUnlocked -> Color(0xFF131D31)
+                                                else -> Color(0xFF0F172A)
+                                            },
+                                            border = BorderStroke(
+                                                if (isSelected) 2.dp else if (isUnlocked) 1.5.dp else 1.dp,
+                                                when {
+                                                    isSelected -> def.accentColor
+                                                    isUnlocked -> def.accentColor.copy(alpha = 0.6f)
+                                                    else -> Color(0xFF1E2E4A)
+                                                }
+                                            ),
+                                            modifier = Modifier
+                                                .clickable(enabled = isUnlocked) {
+                                                    val newSettings = settings.copy(avatarEmoji = def.unlockedIconEmoji)
+                                                    settings = newSettings
+                                                    UserSettingsManager.saveSettings(context, user.username, newSettings)
+                                                    Toast.makeText(context, "Equipped ${def.unlockedIconName} avatar!", Toast.LENGTH_SHORT).show()
+                                                }
+                                                .testTag("expert_avatar_${def.id}")
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (isUnlocked) def.unlockedIconEmoji else "🔒",
+                                                    fontSize = 20.sp
+                                                )
+                                                Column {
+                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                        Text(
+                                                            text = def.unlockedIconName,
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isUnlocked) Color(0xFFF8FAFC) else Color(0xFF64748B)
+                                                        )
+                                                        if (isUnlocked) {
+                                                            Text("✓", fontSize = 10.sp, color = EmeraldSuccess, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    }
+                                                    Text(
+                                                        text = if (isUnlocked) def.rarityText else "${badge.expertTopicsCount}/${badge.totalRequiredTopicsCount} Expert",
+                                                        fontSize = 9.sp,
+                                                        color = if (isUnlocked) def.accentColor else Color(0xFF94A3B8)
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -780,6 +876,106 @@ fun SettingsScreen(
                                         border = BorderStroke(1.dp, CyanAccent.copy(alpha = 0.6f)),
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                         modifier = Modifier.testTag("settings_test_peak_notification_button")
+                                    ) {
+                                        Text("Test Alert", fontSize = 11.sp, color = CyanAccent)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Toggle: Spaced Repetition Knowledge Reinforcement Alerts
+                        var spacedRepetitionAlertsEnabled by remember {
+                            mutableStateOf(com.example.dle_prototype.notifications.KnowledgeSpacedRepetitionNotificationManager.isReminderEnabled(context))
+                        }
+                        val reinforcementHour = remember {
+                            com.example.dle_prototype.notifications.KnowledgeSpacedRepetitionNotificationManager.getScheduledHour(context)
+                        }
+                        val reinforcementThreshold = remember {
+                            com.example.dle_prototype.notifications.KnowledgeSpacedRepetitionNotificationManager.getRetentionThreshold(context)
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF131D31), RoundedCornerShape(14.dp))
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(text = "🧠", fontSize = 14.sp)
+                                        Text(
+                                            text = "Knowledge Spaced Repetition Alerts",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                    Text(
+                                        text = "SM-2 Ebbinghaus memory decay reminders alerting you to reinforce topics and prerequisite anchors.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                }
+                                Switch(
+                                    checked = spacedRepetitionAlertsEnabled,
+                                    onCheckedChange = { isChecked ->
+                                        spacedRepetitionAlertsEnabled = isChecked
+                                        com.example.dle_prototype.notifications.KnowledgeSpacedRepetitionNotificationManager.setReminderEnabled(context, isChecked)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(
+                                                if (isChecked) "Knowledge spaced repetition alerts enabled!" else "Knowledge spaced repetition alerts disabled."
+                                            )
+                                        }
+                                    },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.Black,
+                                        checkedTrackColor = themePrimaryColor
+                                    ),
+                                    modifier = Modifier.testTag("settings_spaced_repetition_switch")
+                                )
+                            }
+
+                            if (spacedRepetitionAlertsEnabled) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = CyanAccent.copy(alpha = 0.15f)
+                                    ) {
+                                        Text(
+                                            text = "Time: ${reinforcementHour}:30 • Alert if retention < $reinforcementThreshold%",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = CyanAccent,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            com.example.dle_prototype.notifications.KnowledgeSpacedRepetitionNotificationManager.sendTestNotification(
+                                                context, user.username, com.example.dle_prototype.data.DatabaseHelper.getInstance(context)
+                                            )
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("Test spaced repetition reminder dispatched! 🧠")
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, CyanAccent.copy(alpha = 0.6f)),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        modifier = Modifier.testTag("settings_test_reinforcement_notification_button")
                                     ) {
                                         Text("Test Alert", fontSize = 11.sp, color = CyanAccent)
                                     }

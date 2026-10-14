@@ -94,8 +94,10 @@ fun MainDashboardView(
     onUpdateTargetHours: (Float) -> Unit = {},
     onOpenSummarizer: () -> Unit = {},
     onOpenQaChat: () -> Unit = {},
+    onOpenMoodleSandbox: () -> Unit = {},
     peakAnalysis: com.example.dle_prototype.data.ml.PeakLearningHoursAnalysis? = null,
     spacedRepetitionOverview: com.example.dle_prototype.data.ml.SpacedRepetitionOverview? = null,
+    knowledgeReinforcementSummary: com.example.dle_prototype.data.graph.KnowledgeSpacedRepetitionSummary? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedFilter by remember { mutableStateOf("ALL") }
@@ -564,6 +566,17 @@ fun MainDashboardView(
         )
 
         // =====================================================================
+        // SECTION 2B.2: RECHARTS 30-DAY MASTERY IMPROVEMENT TRENDS
+        // =====================================================================
+        Recharts30DayMasteryTrendCard(
+            attempts = recentAttempts,
+            currentMasteryPercent = averageAccuracy.coerceAtLeast(65f),
+            expertTopicsCount = 3,
+            intermediateTopicsCount = 4,
+            beginnerTopicsCount = 2
+        )
+
+        // =====================================================================
         // SECTION 2C: ON-DEVICE AI STUDY TOOLS (Summarizer & QA Tutor)
         // =====================================================================
         Surface(
@@ -746,11 +759,97 @@ fun MainDashboardView(
         }
 
         // =====================================================================
+        // SECTION 2C-2: MOODLE PLUGIN & SECURE ML SANDBOX (Secure-ML-with-BERT)
+        // =====================================================================
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF0F172A),
+            border = BorderStroke(1.dp, AmberAccent.copy(alpha = 0.4f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onOpenMoodleSandbox() }
+                .testTag("dashboard_moodle_sandbox_card")
+        ) {
+            Row(
+                modifier = Modifier.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(AmberAccent.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.School,
+                            contentDescription = null,
+                            tint = AmberAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Moodle LMS Plugin",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontSize = 13.sp
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = AmberAccent.copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = "Secure-ML",
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AmberAccent,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "9-feature telemetry · Cryptographic sandbox · Auto-tuning",
+                            fontSize = 11.sp,
+                            color = Color(0xFF94A3B8),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = AmberAccent,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        // =====================================================================
         // SECTION 2D: SPACED REPETITION SCHEDULER QUEUE
         // =====================================================================
         spacedRepetitionOverview?.let { overview ->
             SpacedRepetitionQueueCard(
                 overview = overview,
+                onStartReview = onStartModule
+            )
+        }
+
+        knowledgeReinforcementSummary?.let { kSummary ->
+            KnowledgeReinforcementCard(
+                summary = kSummary,
+                username = user.username,
                 onStartReview = onStartModule
             )
         }

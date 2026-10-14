@@ -633,4 +633,152 @@ class AdaptiveCapabilitiesTest {
         assertEquals(1.0f, progressOver.percentComplete, 0.001f)
         assertTrue(progressOver.isAchieved)
     }
+
+    @Test
+    fun testPrivacySafeguardAndSecureMLEnvironment() {
+        val safeguard = com.example.dle_prototype.data.secure.PrivacySafeguard
+        val secureEnv = com.example.dle_prototype.data.secure.SecureMLEnvironment.INSTANCE
+
+        // 1. Pseudonymization
+        val anonId1 = safeguard.anonymize("student_4821")
+        val anonId2 = safeguard.anonymize("student_4821")
+        val anonId3 = safeguard.anonymize("student_9999")
+        assertTrue("Pseudonym must begin with ANON_", anonId1.startsWith("ANON_"))
+        assertEquals("Identical user IDs must produce deterministic pseudonyms", anonId1, anonId2)
+        assertFalse("Different user IDs must produce distinct pseudonyms", anonId1 == anonId3)
+
+        // 2. AES-256-GCM hardware-backed encryption
+        val plainText = "logins=14,time=95.0,score=88.0"
+        val cipherText = safeguard.encryptData(plainText)
+        assertFalse("Ciphertext must not match plaintext", cipherText == plainText)
+        val decrypted = safeguard.decryptData(cipherText)
+        assertEquals("Decrypted plaintext must match original", plainText, decrypted)
+
+        // 3. 9-Feature Interaction Telemetry Vector
+        val telemetry = com.example.dle_prototype.data.LearningTelemetry(
+            loginCount = 14,
+            totalTimeMinutes = 95f,
+            pageVisits = 48,
+            searchQueries = 19,
+            activityCompletionRate = 83.3f,
+            lastQuizScore = 88f,
+            reactionsPositive = 8,
+            reactionsNegative = 1,
+            feedbackRating = 9.2f
+        )
+        val array9 = telemetry.to9FeatureArray()
+        assertEquals(9, array9.size)
+        assertEquals(14f, array9[0], 0.01f) // logins
+        assertEquals(95f, array9[1], 0.01f) // time_spent
+        assertEquals(48f, array9[2], 0.01f) // page_visits
+        assertEquals(19f, array9[3], 0.01f) // search_queries
+        assertEquals(83.3f, array9[4], 0.01f) // activity_completion
+        assertEquals(88f, array9[5], 0.01f) // quiz_score
+        assertEquals(8f, array9[6], 0.01f)  // reactions_pos
+        assertEquals(1f, array9[7], 0.01f)  // reactions_neg
+        assertEquals(9.2f, array9[8], 0.01f) // feedback
+
+        // 4. Sandboxing
+        val (token, record) = secureEnv.isolate("student_4821", telemetry)
+        assertTrue(token.startsWith("data_sandbox_"))
+        assertEquals(anonId1, record.anonymizedUserToken)
+        assertTrue(record.telemetry.isEncryptedInSandbox)
+    }
+
+    @Test
+    fun testContextualChatbotTopicExtractionAndTraitConditioning() = kotlinx.coroutines.runBlocking {
+        val engine = com.example.dle_prototype.data.qa.QaChatEngine
+
+        // 1. NLP Topic Extraction
+        val tags = engine.extractTopics("Explain State Hoisting and Recomposition in Jetpack Compose")
+        assertTrue("Must extract Jetpack Compose topic", tags.contains("#JetpackCompose"))
+        assertTrue("Must extract State Hoisting topic", tags.contains("#StateHoisting"))
+
+        // 2. Personalization Toggle & Trait Conditioning
+        val personalizedResp = engine.generateResponse(
+            query = "What is State Hoisting?",
+            username = "test_user",
+            isPersonalized = true
+        )
+        assertTrue(personalizedResp.isPersonalized)
+        assertTrue("Must have extracted topic tags", personalizedResp.extractedTopics.isNotEmpty())
+        assertTrue("Must have motivational cue when personalized", personalizedResp.answer.contains("PLI"))
+
+        val neutralResp = engine.generateResponse(
+            query = "What is State Hoisting?",
+            username = "test_user",
+            isPersonalized = false
+        )
+        assertFalse(neutralResp.isPersonalized)
+        assertFalse("Neutral response must not contain motivational cue", neutralResp.answer.contains("🌟 **PLI Motivational Cue**"))
+    }
+
+    @Test
+    fun testModelWeightAlphaBlending() {
+        val wLocal = com.example.dle_prototype.data.ml.ModelWeights.defaultInit(5, 8, 4)
+        val wGlobal = com.example.dle_prototype.data.ml.ModelWeights.defaultInit(5, 8, 4)
+
+        fun blendWeights(local: com.example.dle_prototype.data.ml.ModelWeights, globalBase: com.example.dle_prototype.data.ml.ModelWeights, alpha: Float): com.example.dle_prototype.data.ml.ModelWeights {
+            val countW1Rows = local.w1.size
+            val countW1Cols = local.w1[0].size
+            val blendedW1 = Array(countW1Rows) { i ->
+                FloatArray(countW1Cols) { j ->
+                    alpha * local.w1[i][j] + (1f - alpha) * globalBase.w1[i][j]
+                }
+            }
+            val blendedB1 = FloatArray(local.b1.size) { i ->
+                alpha * local.b1[i] + (1f - alpha) * globalBase.b1[i]
+            }
+            val countW2Rows = local.w2.size
+            val countW2Cols = local.w2[0].size
+            val blendedW2 = Array(countW2Rows) { i ->
+                FloatArray(countW2Cols) { j ->
+                    alpha * local.w2[i][j] + (1f - alpha) * globalBase.w2[i][j]
+                }
+            }
+            val blendedB2 = FloatArray(local.b2.size) { i ->
+                alpha * local.b2[i] + (1f - alpha) * globalBase.b2[i]
+            }
+            return com.example.dle_prototype.data.ml.ModelWeights(
+                w1 = blendedW1,
+                b1 = blendedB1,
+                w2 = blendedW2,
+                b2 = blendedB2,
+                version = local.version + 1,
+                trainedEpochs = local.trainedEpochs,
+                finalLoss = local.finalLoss,
+                updatedAt = System.currentTimeMillis()
+            )
+        }
+
+        // Test alpha = 1.0 (pure local)
+        val pureLocal = blendWeights(wLocal, wGlobal, 1.0f)
+        assertEquals(wLocal.w1[0][0], pureLocal.w1[0][0], 0.0001f)
+
+        // Test alpha = 0.0 (pure global)
+        val pureGlobal = blendWeights(wLocal, wGlobal, 0.0f)
+        assertEquals(wGlobal.w1[0][0], pureGlobal.w1[0][0], 0.0001f)
+
+        // Test alpha = 0.5 (balanced blend)
+        val balanced = blendWeights(wLocal, wGlobal, 0.5f)
+        val expected = 0.5f * wLocal.w1[0][0] + 0.5f * wGlobal.w1[0][0]
+        assertEquals(expected, balanced.w1[0][0], 0.0001f)
+    }
+
+    @Test
+    fun testAutomatedHyperparameterTuning() = kotlinx.coroutines.runBlocking {
+        val secureEnv = com.example.dle_prototype.data.secure.SecureMLEnvironment.INSTANCE
+        val telemetry = com.example.dle_prototype.data.LearningTelemetry(
+            loginCount = 10,
+            totalTimeMinutes = 80f,
+            lastQuizScore = 85f,
+            activityCompletionRate = 80f,
+            feedbackRating = 9.0f
+        )
+        val tuningResult = secureEnv.runAutomatedHyperparameterTuning(telemetry)
+        assertTrue("Must evaluate at least 1 tuning trial", tuningResult.evaluatedTrials.isNotEmpty())
+        assertTrue("Best learning rate must be positive", tuningResult.bestLearningRate > 0f)
+        assertTrue("Best momentum must be between 0 and 1", tuningResult.bestMomentum in 0f..1f)
+        assertTrue("Validation loss must decrease", tuningResult.bestLoss <= tuningResult.initialLoss)
+    }
 }

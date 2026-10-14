@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.dle_prototype.data.FeedCard
@@ -321,7 +322,8 @@ fun FeedCardView(
                                                 text = line,
                                                 fontFamily = FontFamily.Monospace,
                                                 fontSize = 12.sp,
-                                                color = if (isChosen) Color.White else Color(0xFFE2E8F0)
+                                                color = if (isChosen) Color.White else Color(0xFFE2E8F0),
+                                                modifier = Modifier.weight(1f)
                                             )
                                         }
                                     }
@@ -441,6 +443,7 @@ fun FeedCardView(
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Row(
+                                            modifier = Modifier.weight(1f),
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
@@ -455,7 +458,7 @@ fun FeedCardView(
                                                 modifier = Modifier.size(18.dp)
                                             )
                                             Text(
-                                                text = if (explainerRemainingSeconds == 0) "Time Expired! (0s)" else "15s Read Timer: ${explainerRemainingSeconds}s",
+                                                text = if (explainerRemainingSeconds == 0) "Expired (0s)" else "Timer: ${explainerRemainingSeconds}s",
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = when {
@@ -463,14 +466,18 @@ fun FeedCardView(
                                                     explainerRemainingSeconds <= 7 -> AmberAccent
                                                     else -> Color(0xFFF1F5F9)
                                                 },
-                                                fontFamily = FontFamily.Monospace
+                                                fontFamily = FontFamily.Monospace,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                         }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
 
                                         LinearProgressIndicator(
                                             progress = { explainerProgress },
                                             modifier = Modifier
-                                                .width(90.dp)
+                                                .width(75.dp)
                                                 .height(6.dp)
                                                 .clip(RoundedCornerShape(3.dp)),
                                             color = when {
@@ -550,7 +557,8 @@ fun FeedCardView(
                                                 text = opt,
                                                 fontSize = 13.sp,
                                                 color = Color(0xFFF1F5F9),
-                                                fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Normal
+                                                fontWeight = if (isChosen) FontWeight.Bold else FontWeight.Normal,
+                                                modifier = Modifier.weight(1f)
                                             )
                                         }
                                     }
@@ -637,7 +645,11 @@ fun FeedCardView(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
                                 Icon(
                                     if (isCorrect) Icons.Default.CheckCircle else Icons.Default.Error,
                                     contentDescription = null,
@@ -648,9 +660,12 @@ fun FeedCardView(
                                     text = if (isCorrect) "Correct! +$xpGained XP (${multiplier}x)" else "Incorrect · +3 XP",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
+                            Spacer(modifier = Modifier.width(6.dp))
 
                             // Swipe up or Next button
                             Button(

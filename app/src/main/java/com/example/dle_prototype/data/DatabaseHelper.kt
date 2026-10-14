@@ -21,6 +21,13 @@ import java.util.Date
 import java.util.Locale
 import com.example.dle_prototype.data.ml.AdaptiveDifficultyProfile
 import com.example.dle_prototype.data.qa.QaChatMessage
+import com.example.dle_prototype.data.graph.KnowledgeEdge
+import com.example.dle_prototype.data.graph.VoiceSummaryRecord
+import com.example.dle_prototype.data.graph.KnowledgeSpacedRepetitionSummary
+import com.example.dle_prototype.data.graph.KnowledgeReinforcementSchedule
+import com.example.dle_prototype.data.graph.KnowledgeGraphEngine
+import com.example.dle_prototype.data.graph.KnowledgeExpertBadgeStatus
+import com.example.dle_prototype.data.graph.KnowledgeMasteryBadgeEngine
 
 class DatabaseHelper private constructor(context: Context) :
     SQLiteOpenHelper(context.applicationContext, DATABASE_NAME, null, DATABASE_VERSION) {
@@ -450,6 +457,33 @@ class DatabaseHelper private constructor(context: Context) :
                 title TEXT NOT NULL,
                 message TEXT NOT NULL,
                 details_json TEXT NOT NULL DEFAULT '{}'
+            );
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS custom_knowledge_edges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                from_id TEXT NOT NULL,
+                to_id TEXT NOT NULL,
+                relationship TEXT NOT NULL,
+                reasoning TEXT,
+                created_at INTEGER NOT NULL,
+                UNIQUE(username, from_id, to_id)
+            );
+            """.trimIndent()
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS voice_learning_summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                transcript TEXT NOT NULL,
+                suggested_count INTEGER NOT NULL,
+                timestamp INTEGER NOT NULL
             );
             """.trimIndent()
         )
@@ -2501,6 +2535,41 @@ class DatabaseHelper private constructor(context: Context) :
         )
     }
 
+    suspend fun getKnowledgeSpacedRepetitionSummary(username: String): KnowledgeSpacedRepetitionSummary = withContext(Dispatchers.IO) {
+        val graph = KnowledgeGraphEngine.buildKnowledgeGraph(username, this@DatabaseHelper)
+        val attempts = getAllQuizHistory(username, limit = 300)
+        KnowledgeGraphEngine.scheduleKnowledgeReinforcements(
+            nodes = graph.nodes,
+            edges = graph.edges,
+            quizAttempts = attempts,
+            currentTimeMillis = System.currentTimeMillis()
+        )
+    }
+
+    suspend fun checkAndAwardKnowledgeMasteryBadges(username: String, currentAvatarEmoji: String = ""): List<KnowledgeExpertBadgeStatus> = withContext(Dispatchers.IO) {
+        val graph = KnowledgeGraphEngine.buildKnowledgeGraph(username, this@DatabaseHelper)
+        val previouslyUnlocked = getUnlockedBadges(username)
+        val statuses = KnowledgeMasteryBadgeEngine.evaluateBadges(
+            nodes = graph.nodes,
+            currentAvatarEmoji = currentAvatarEmoji,
+            unlockedMap = previouslyUnlocked
+        )
+
+        for (badge in statuses) {
+            if (badge.isUnlocked && !previouslyUnlocked.containsKey(badge.definition.id)) {
+                awardBadge(
+                    username = username,
+                    badgeId = badge.definition.id,
+                    xpAwarded = badge.definition.xpReward,
+                    timestamp = badge.unlockedAt ?: System.currentTimeMillis()
+                )
+            }
+        }
+
+        statuses
+    }
+
+
     // ----------------------------------------------------
     // User Streak Data Access Layer
     // ----------------------------------------------------
@@ -3636,6 +3705,156 @@ class DatabaseHelper private constructor(context: Context) :
         ).use { cursor ->
             if (cursor.moveToFirst()) cursor.getInt(0) else 0
         }
+    }
+
+    // =========================================================================
+    // CUSTOM KNOWLEDGE GRAPH CONNECTIONS & VOICE SUMMARIES
+    // =========================================================================
+
+    suspend fun getCustomKnowledgeEdges(username: String): List<KnowledgeEdge> = withContext(Dispatchers.IO) {
+        val edges = mutableListOf<KnowledgeEdge>()
+        try {
+            readableDatabase.rawQuery(
+                """
+                SELECT from_id, to_id, relationship, reasoning
+                FROM custom_knowledge_edges
+                WHERE username = ?
+                ORDER BY created_at ASC
+                """.trimIndent(),
+                arrayOf(username)
+            ).use { cursor ->
+                val fromCol = cursor.getColumnIndexOrThrow("from_id")
+                val toCol = cursor.getColumnIndexOrThrow("to_id")
+                val relCol = cursor.getColumnIndexOrThrow("relationship")
+                val reasonCol = cursor.getColumnIndexOrThrow("reasoning")
+                while (cursor.moveToNext()) {
+                    edges.add(
+                        KnowledgeEdge(
+                            fromId = cursor.getString(fromCol),
+                            toId = cursor.getString(toCol),
+                            relationship = cursor.getString(relCol),
+                            isPrerequisite = false,
+                            isCustom = true,
+                            reasoning = cursor.getString(reasonCol)
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+        edges
+    }
+
+    suspend fun insertCustomKnowledgeEdge(
+        username: String,
+        fromId: String,
+        toId: String,
+        relationship: String,
+        reasoning: String = ""
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val values = ContentValues().apply {
+                put("username", username)
+                put("from_id", fromId)
+                put("to_id", toId)
+                put("relationship", relationship)
+                put("reasoning", reasoning)
+                put("created_at", System.currentTimeMillis())
+            }
+            val id = writableDatabase.insertWithOnConflict(
+                "custom_knowledge_edges",
+                null,
+                values,
+                SQLiteDatabase.CONFLICT_REPLACE
+            )
+            id != -1L
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun deleteCustomKnowledgeEdge(
+        username: String,
+        fromId: String,
+        toId: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val rows = writableDatabase.delete(
+                "custom_knowledge_edges",
+                "username = ? AND from_id = ? AND to_id = ?",
+                arrayOf(username, fromId, toId)
+            )
+            rows > 0
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun clearCustomKnowledgeEdges(username: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val rows = writableDatabase.delete(
+                "custom_knowledge_edges",
+                "username = ?",
+                arrayOf(username)
+            )
+            rows > 0
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun saveVoiceSummary(
+        username: String,
+        transcript: String,
+        suggestedCount: Int
+    ): Long = withContext(Dispatchers.IO) {
+        try {
+            val values = ContentValues().apply {
+                put("username", username)
+                put("transcript", transcript)
+                put("suggested_count", suggestedCount)
+                put("timestamp", System.currentTimeMillis())
+            }
+            writableDatabase.insert("voice_learning_summaries", null, values)
+        } catch (_: Exception) {
+            -1L
+        }
+    }
+
+    suspend fun getRecentVoiceSummaries(
+        username: String,
+        limit: Int = 10
+    ): List<VoiceSummaryRecord> = withContext(Dispatchers.IO) {
+        val records = mutableListOf<VoiceSummaryRecord>()
+        try {
+            readableDatabase.rawQuery(
+                """
+                SELECT id, username, transcript, suggested_count, timestamp
+                FROM voice_learning_summaries
+                WHERE username = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """.trimIndent(),
+                arrayOf(username, limit.toString())
+            ).use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow("id")
+                val userCol = cursor.getColumnIndexOrThrow("username")
+                val textCol = cursor.getColumnIndexOrThrow("transcript")
+                val countCol = cursor.getColumnIndexOrThrow("suggested_count")
+                val timeCol = cursor.getColumnIndexOrThrow("timestamp")
+                while (cursor.moveToNext()) {
+                    records.add(
+                        VoiceSummaryRecord(
+                            id = cursor.getLong(idCol),
+                            username = cursor.getString(userCol),
+                            transcript = cursor.getString(textCol),
+                            suggestedCount = cursor.getInt(countCol),
+                            timestamp = cursor.getLong(timeCol)
+                        )
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+        records
     }
 }
 

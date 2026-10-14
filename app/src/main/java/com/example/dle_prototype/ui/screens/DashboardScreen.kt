@@ -134,9 +134,17 @@ import com.example.dle_prototype.data.ml.ModelWeights
 import com.example.dle_prototype.data.ml.TrainingCheckpoint
 import com.example.dle_prototype.data.ml.TrainingLogEntry
 import com.example.dle_prototype.ui.components.AchievementsSection
+import com.example.dle_prototype.ui.components.AchievementsBadgeShowcaseCard
+import com.example.dle_prototype.ui.components.StreakConsistencyCounterCard
+import com.example.dle_prototype.ui.components.RechartsStreakLineGraphCard
 import com.example.dle_prototype.ui.components.DailyGoalCard
 import com.example.dle_prototype.ui.components.LeaderboardSection
 import com.example.dle_prototype.ui.components.QuizHistorySection
+import com.example.dle_prototype.ui.components.Recharts30DayMasteryTrendCard
+import com.example.dle_prototype.ui.components.KnowledgeReinforcementCard
+import com.example.dle_prototype.ui.components.KnowledgeMasteryProfileIconsCard
+import com.example.dle_prototype.data.graph.KnowledgeExpertBadgeStatus
+import com.example.dle_prototype.data.graph.KnowledgeExpertBadgeDefinition
 import com.example.dle_prototype.ui.components.RewardsHubSheet
 import com.example.dle_prototype.ui.components.TodayFocusCard
 import com.example.dle_prototype.ui.components.TraitRadarCard
@@ -189,6 +197,7 @@ fun DashboardScreen(
     onOpenUxTest: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenQaChat: () -> Unit = {},
+    onOpenMoodleSandbox: () -> Unit = {},
     onThemeSettingsChanged: (com.example.dle_prototype.data.UserSettings) -> Unit = {},
     onLogout: () -> Unit,
     tabNavController: NavHostController = rememberNavController(),
@@ -226,6 +235,7 @@ fun DashboardScreen(
     var digitalBadges by remember { mutableStateOf<List<com.example.dle_prototype.data.badges.DigitalBadge>>(emptyList()) }
     var celebrationBadge by remember { mutableStateOf<com.example.dle_prototype.data.badges.DigitalBadge?>(null) }
     var spacedRepetitionOverview by remember { mutableStateOf<com.example.dle_prototype.data.ml.SpacedRepetitionOverview?>(null) }
+    var knowledgeReinforcementSummary by remember { mutableStateOf<com.example.dle_prototype.data.graph.KnowledgeSpacedRepetitionSummary?>(null) }
     var peakAnalysis by remember { mutableStateOf<com.example.dle_prototype.data.ml.PeakLearningHoursAnalysis?>(null) }
     var showExportDialog by remember { mutableStateOf(false) }
 
@@ -269,6 +279,7 @@ fun DashboardScreen(
         }
 
         spacedRepetitionOverview = dbHelper.getSpacedRepetitionOverview(user.username)
+        knowledgeReinforcementSummary = dbHelper.getKnowledgeSpacedRepetitionSummary(user.username)
         peakAnalysis = dbHelper.getPeakLearningHoursAnalysis(user.username)
 
         latencySnapshot = InferenceLatencyTracker.profileInference(
@@ -398,12 +409,14 @@ fun DashboardScreen(
                     onStartQuiz = onStartQuiz,
                     onOpenFocus = onOpenFocus,
                     onOpenQaChat = onOpenQaChat,
+                    onOpenMoodleSandbox = onOpenMoodleSandbox,
                     onUpdateTargetHours = { newHours ->
                         coroutineScope.launch {
                             dailyGoalProgress = dbHelper.setDailyTargetHours(user.username, newHours)
                         }
                     },
-                    spacedRepetitionOverview = spacedRepetitionOverview
+                    spacedRepetitionOverview = spacedRepetitionOverview,
+                    knowledgeReinforcementSummary = knowledgeReinforcementSummary
                 )
             }
 
@@ -471,7 +484,14 @@ fun DashboardScreen(
                     onOpenQaChat = onOpenQaChat,
                     focusSessions = focusSessions,
                     digitalBadges = digitalBadges,
-                    onOpenExport = { showExportDialog = true }
+                    knowledgeReinforcementSummary = knowledgeReinforcementSummary,
+                    onOpenExport = { showExportDialog = true },
+                    userSettings = userSettings,
+                    onSettingsUpdated = { updated ->
+                        userSettings = updated
+                        UserSettingsManager.saveSettings(context, user.username, updated)
+                        onThemeSettingsChanged(updated)
+                    }
                 )
             }
 
@@ -497,7 +517,9 @@ fun DashboardScreen(
                     onClearCache = { showClearConfirm = true },
                     onLogout = onLogout,
                     onOpenExport = { showExportDialog = true },
-                    onOpenQaChat = onOpenQaChat
+                    onOpenQaChat = onOpenQaChat,
+                    onOpenMoodleSandbox = onOpenMoodleSandbox,
+                    onStartQuizWithCategory = onStartQuiz
                 )
             }
         }
@@ -861,8 +883,10 @@ fun LearnTabView(
     onStartQuiz: (categoryName: String, categoryNumber: Float) -> Unit,
     onOpenFocus: () -> Unit = {},
     onOpenQaChat: () -> Unit = {},
+    onOpenMoodleSandbox: () -> Unit = {},
     onUpdateTargetHours: (Float) -> Unit = {},
-    spacedRepetitionOverview: com.example.dle_prototype.data.ml.SpacedRepetitionOverview? = null
+    spacedRepetitionOverview: com.example.dle_prototype.data.ml.SpacedRepetitionOverview? = null,
+    knowledgeReinforcementSummary: com.example.dle_prototype.data.graph.KnowledgeSpacedRepetitionSummary? = null
 ) {
     var selectedSegment by remember { mutableIntStateOf(0) } // 0 = Dashboard, 1 = Quiz, 2 = Flashcards, 3 = Focus, 4 = Summarizer, 5 = QA Chat
 
@@ -1042,7 +1066,9 @@ fun LearnTabView(
                     onUpdateTargetHours = onUpdateTargetHours,
                     onOpenSummarizer = { selectedSegment = 4 },
                     onOpenQaChat = { selectedSegment = 5 },
-                    spacedRepetitionOverview = spacedRepetitionOverview
+                    onOpenMoodleSandbox = onOpenMoodleSandbox,
+                    spacedRepetitionOverview = spacedRepetitionOverview,
+                    knowledgeReinforcementSummary = knowledgeReinforcementSummary
                 )
             }
 
@@ -1429,9 +1455,33 @@ fun ProgressTabView(
     onOpenQaChat: (() -> Unit)? = null,
     focusSessions: List<StudySessionRecord>,
     digitalBadges: List<com.example.dle_prototype.data.badges.DigitalBadge> = emptyList(),
-    onOpenExport: (() -> Unit)? = null
+    knowledgeReinforcementSummary: com.example.dle_prototype.data.graph.KnowledgeSpacedRepetitionSummary? = null,
+    onOpenExport: (() -> Unit)? = null,
+    userSettings: com.example.dle_prototype.data.UserSettings? = null,
+    onSettingsUpdated: ((com.example.dle_prototype.data.UserSettings) -> Unit)? = null
 ) {
-    var selectedSegment by remember { mutableIntStateOf(0) } // 0=Overview, 1=Knowledge Graph, 2=History, 3=Achievements, 4=Weekly Recap
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var selectedSegment by remember { mutableIntStateOf(0) } // 0=Overview, 1=Knowledge Graph, 2=Mastery Trends, 3=History, 4=Badges & Streaks, 5=Weekly Recap
+    var userStreakData by remember { mutableStateOf<com.example.dle_prototype.data.UserStreakData?>(null) }
+    var gamificationState by remember { mutableStateOf<com.example.dle_prototype.data.UserGamificationState?>(null) }
+    var evaluatedBadges by remember { mutableStateOf<List<com.example.dle_prototype.data.badges.DigitalBadge>>(digitalBadges) }
+    var knowledgeBadgeStatuses by remember { mutableStateOf<List<KnowledgeExpertBadgeStatus>>(emptyList()) }
+
+    LaunchedEffect(user.username, digitalBadges, userSettings?.avatarEmoji) {
+        userStreakData = dbHelper.getUserStreakData(user.username)
+        gamificationState = dbHelper.getGamificationState(user.username)
+        if (digitalBadges.isNotEmpty()) {
+            evaluatedBadges = digitalBadges
+        } else {
+            val res = dbHelper.checkAndAwardBadges(user.username)
+            evaluatedBadges = res.allBadges
+        }
+        knowledgeBadgeStatuses = dbHelper.checkAndAwardKnowledgeMasteryBadges(
+            username = user.username,
+            currentAvatarEmoji = userSettings?.avatarEmoji ?: ""
+        )
+    }
 
     BackHandler(enabled = selectedSegment != 0) {
         selectedSegment = 0
@@ -1458,28 +1508,37 @@ fun ProgressTabView(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable { selectedSegment = 4 }
+                ) {
                     Text(text = "STREAK", fontSize = 10.sp, color = Color(0xFF94A3B8), fontFamily = FontFamily.Monospace)
                     Text(text = "${dailyStreak}d 🔥", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = AmberAccent)
                 }
 
                 Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color(0xFF334155)))
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable { selectedSegment = 4 }
+                ) {
                     Text(text = "LONGEST", fontSize = 10.sp, color = Color(0xFF94A3B8), fontFamily = FontFamily.Monospace)
                     Text(text = "${longestStreak}d ⚡", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = CyanAccent)
                 }
 
                 Box(modifier = Modifier.width(1.dp).height(30.dp).background(Color(0xFF334155)))
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable { selectedSegment = 3 }
+                ) {
                     Text(text = "QUIZZES", fontSize = 10.sp, color = Color(0xFF94A3B8), fontFamily = FontFamily.Monospace)
                     Text(text = "$totalQuizzes 📚", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = EmeraldSuccess)
                 }
             }
         }
 
-        // Top Segmented Control: [ Overview ] | [ Graph ] | [ History ] | [ Badges ] | [ Ranks ]
+        // Top Segmented Control: [ Overview ] | [ Graph ] | [ Trends ] | [ History ] | [ Badges & Streaks ] | [ Recap ]
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1495,7 +1554,7 @@ fun ProgressTabView(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val segments = listOf("Overview", "Knowledge Graph 🌐", "Quiz History", "Badges", "Rankings")
+                val segments = listOf("Overview", "Knowledge Graph 🌐", "Mastery Trends 📈", "Quiz History", "Badges & Streaks 🏆🔥", "Weekly Recap")
                 segments.forEachIndexed { idx, label ->
                     val isSel = selectedSegment == idx
                     Box(
@@ -1520,6 +1579,29 @@ fun ProgressTabView(
 
         when (selectedSegment) {
             0 -> {
+                // Streak Counter & Consistency System Card
+                val effectiveStreakData = userStreakData ?: com.example.dle_prototype.data.UserStreakData(
+                    username = user.username,
+                    currentStreak = dailyStreak,
+                    longestStreak = longestStreak,
+                    totalDaysActive = dailyStreak.coerceAtLeast(1),
+                    isStreakActiveToday = true
+                )
+                StreakConsistencyCounterCard(
+                    streakData = effectiveStreakData,
+                    attempts = recentAttempts,
+                    gamificationState = gamificationState,
+                    onPracticeClick = { onStartQuizWithCategory?.invoke("JavaScript", 3f) ?: onStartQuiz() },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Achievements & Badges Showcase Card
+                AchievementsBadgeShowcaseCard(
+                    badges = evaluatedBadges,
+                    onViewAllBadges = { selectedSegment = 4 },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 // [ Overview ] Trait Radar & Snapshots
                 profile?.let { prof ->
                     TraitRadarCard(
@@ -1536,6 +1618,13 @@ fun ProgressTabView(
                     onStartQuiz = onStartQuizWithCategory,
                     onOpenQaChat = onOpenQaChat
                 )
+
+                // 30-Day Mastery Improvement Trends (Recharts)
+                Recharts30DayMasteryTrendCard(
+                    attempts = recentAttempts,
+                    currentMasteryPercent = quizPerformanceStats.averageAccuracyPercent.coerceAtLeast(65f),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             1 -> {
@@ -1547,9 +1636,37 @@ fun ProgressTabView(
                     onStartQuiz = onStartQuizWithCategory,
                     onOpenQaChat = onOpenQaChat
                 )
+
+                // Spaced Repetition Reinforcements Calibrated to Knowledge Graph Mastery
+                knowledgeReinforcementSummary?.let { kSummary ->
+                    KnowledgeReinforcementCard(
+                        summary = kSummary,
+                        username = user.username,
+                        onStartReview = { cat: String, num: Float ->
+                            onStartQuizWithCategory?.invoke(cat, num) ?: onStartQuiz()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Recharts 30-Day Mastery Improvement Trends in Knowledge Graph Tab
+                Recharts30DayMasteryTrendCard(
+                    attempts = recentAttempts,
+                    currentMasteryPercent = quizPerformanceStats.averageAccuracyPercent.coerceAtLeast(65f),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             2 -> {
+                // [ Mastery Trends ] Dedicated Full 30-Day Recharts Mastery Trends View
+                Recharts30DayMasteryTrendCard(
+                    attempts = recentAttempts,
+                    currentMasteryPercent = quizPerformanceStats.averageAccuracyPercent.coerceAtLeast(65f),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            3 -> {
                 // [ History ] Quiz attempts list
                 QuizHistorySection(
                     attempts = recentAttempts,
@@ -1559,16 +1676,63 @@ fun ProgressTabView(
                 )
             }
 
-            3 -> {
-                // [ Achievements ] Badge grid
+            4 -> {
+                // [ Badges & Consistency Streaks System ]
+                val effectiveStreakData = userStreakData ?: com.example.dle_prototype.data.UserStreakData(
+                    username = user.username,
+                    currentStreak = dailyStreak,
+                    longestStreak = longestStreak,
+                    totalDaysActive = dailyStreak.coerceAtLeast(1),
+                    isStreakActiveToday = true
+                )
+                StreakConsistencyCounterCard(
+                    streakData = effectiveStreakData,
+                    attempts = recentAttempts,
+                    gamificationState = gamificationState,
+                    onPracticeClick = { onStartQuizWithCategory?.invoke("JavaScript", 3f) ?: onStartQuiz() },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Interactive Recharts Line Graph for Weekly Consistency
+                RechartsStreakLineGraphCard(
+                    dailyStreak = dailyStreak,
+                    longestStreak = longestStreak,
+                    recentAttempts = recentAttempts,
+                    weeklyXp = quizPerformanceStats.totalScore.coerceAtLeast(250),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Digital Achievements & Badge Grid
                 AchievementsSection(
                     stats = quizPerformanceStats,
-                    digitalBadges = digitalBadges,
+                    digitalBadges = evaluatedBadges,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // 🎖️ Knowledge Graph Expert Mastery Badges & Profile Avatars
+                KnowledgeMasteryProfileIconsCard(
+                    badgeStatuses = knowledgeBadgeStatuses,
+                    currentAvatarEmoji = userSettings?.avatarEmoji ?: "",
+                    onEquipAvatar = { def ->
+                        val currentSet = userSettings ?: com.example.dle_prototype.data.UserSettingsManager.loadSettings(context, user.username)
+                        val newSettings = currentSet.copy(avatarEmoji = def.unlockedIconEmoji)
+                        onSettingsUpdated?.invoke(newSettings)
+                        com.example.dle_prototype.data.UserSettingsManager.saveSettings(context, user.username, newSettings)
+                        coroutineScope.launch {
+                            knowledgeBadgeStatuses = dbHelper.checkAndAwardKnowledgeMasteryBadges(
+                                username = user.username,
+                                currentAvatarEmoji = def.unlockedIconEmoji
+                            )
+                        }
+                    },
+                    onPracticeTopic = { cat, num ->
+                        onStartQuizWithCategory?.invoke(cat, num) ?: onStartQuiz()
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
 
-            4 -> {
+            5 -> {
                 // [ Weekly Recap ]
                 WeeklyRecapCard(
                     username = user.username,
@@ -1667,11 +1831,23 @@ fun ProfileTabView(
     onClearCache: () -> Unit,
     onLogout: () -> Unit,
     onOpenExport: (() -> Unit)? = null,
-    onOpenQaChat: () -> Unit = {}
+    onOpenQaChat: () -> Unit = {},
+    onOpenMoodleSandbox: () -> Unit = {},
+    onStartQuizWithCategory: ((categoryName: String, categoryNumber: Float) -> Unit)? = null
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var isDevModeExpanded by remember { mutableStateOf(false) }
     var showRewardsHub by remember { mutableStateOf(false) }
     var showThemeCustomizer by remember { mutableStateOf(false) }
+    var knowledgeBadgeStatuses by remember { mutableStateOf<List<KnowledgeExpertBadgeStatus>>(emptyList()) }
+
+    LaunchedEffect(user.username, userSettings.avatarEmoji) {
+        knowledgeBadgeStatuses = dbHelper.checkAndAwardKnowledgeMasteryBadges(
+            username = user.username,
+            currentAvatarEmoji = userSettings.avatarEmoji
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -1729,6 +1905,27 @@ fun ProfileTabView(
                 }
             }
         }
+
+        // 🎖️ Knowledge Graph Mastery Profile Icons & Avatar System
+        KnowledgeMasteryProfileIconsCard(
+            badgeStatuses = knowledgeBadgeStatuses,
+            currentAvatarEmoji = userSettings.avatarEmoji,
+            onEquipAvatar = { def ->
+                val newSettings = userSettings.copy(avatarEmoji = def.unlockedIconEmoji)
+                onSettingsUpdated(newSettings)
+                UserSettingsManager.saveSettings(context, user.username, newSettings)
+                coroutineScope.launch {
+                    knowledgeBadgeStatuses = dbHelper.checkAndAwardKnowledgeMasteryBadges(
+                        username = user.username,
+                        currentAvatarEmoji = def.unlockedIconEmoji
+                    )
+                }
+            },
+            onPracticeTopic = { cat, num ->
+                onStartQuizWithCategory?.invoke(cat, num)
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
 
         // 🎁 Rewards Hub & Hangar Shortcut
         Surface(
@@ -2067,6 +2264,40 @@ fun ProfileTabView(
                             }
                         }
                         Text("Chat →", color = Color(0xFF818CF8), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Moodle Plugin & Secure ML Sandbox Shortcut
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF090E1A),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenMoodleSandbox() }
+                        .padding(12.dp)
+                        .testTag("moodle_sandbox_tool_card")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(AmberAccent.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.School, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(20.dp))
+                            }
+                            Column {
+                                Text("Moodle Plugin Sandbox", fontWeight = FontWeight.Bold, color = Color(0xFFF8FAFC))
+                                Text("9-feature telemetry, sandbox AES-256 & auto-tuning", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                            }
+                        }
+                        Text("Open →", color = AmberAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

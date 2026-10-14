@@ -283,19 +283,114 @@ object QaChatEngine {
     )
 
     /**
-     * Answers questions grounded in the user's live profile, learning stats, and curriculum knowledge.
+     * Extracts academic entities, concepts, and topic hashtags from user prompts.
+     * Mirrors the Rake & spaCy NER topic extraction in personalized-chat-test.ipynb.
+     */
+    fun extractTopics(query: String): List<String> {
+        val lower = query.lowercase()
+        val tags = mutableListOf<String>()
+        if (lower.contains("compose") || lower.contains("recompos") || lower.contains("state")) tags.add("#JetpackCompose")
+        if (lower.contains("state hoisting") || lower.contains("hoist")) tags.add("#StateHoisting")
+        if (lower.contains("coroutine") || lower.contains("dispatcher") || lower.contains("suspend")) tags.add("#KotlinCoroutines")
+        if (lower.contains("flow") || lower.contains("stateflow") || lower.contains("sharedflow")) tags.add("#AsynchronousFlow")
+        if (lower.contains("tflite") || lower.contains("model") || lower.contains("inference") || lower.contains("neural")) tags.add("#OnDeviceML")
+        if (lower.contains("federated") || lower.contains("fedavg") || lower.contains("blend")) tags.add("#FederatedLearning")
+        if (lower.contains("yolo") || lower.contains("vision") || lower.contains("ocr") || lower.contains("detect")) tags.add("#ComputerVision")
+        if (lower.contains("moodle") || lower.contains("lms") || lower.contains("sandbox") || lower.contains("plugin")) tags.add("#MoodlePlugin")
+        if (lower.contains("streak") || lower.contains("leitner") || lower.contains("spaced") || lower.contains("review")) tags.add("#SpacedRepetition")
+        if (lower.contains("calculus") || lower.contains("integral") || lower.contains("derivative")) tags.add("#CalculusDynamics")
+        if (lower.contains("physics") || lower.contains("friction") || lower.contains("ramp")) tags.add("#AppliedPhysics")
+        if (tags.isEmpty()) {
+            tags.add("#CognitiveLearning")
+            tags.add("#SoftwareEngineering")
+        }
+        return tags.distinct()
+    }
+
+    /**
+     * Answers questions grounded in curriculum knowledge, contextualized with
+     * the user's live profile, learning stats, and PLI trait conditioning.
+     *
+     * Directly implements the ContextualChatbot architecture with personalization toggle
+     * from Secure-ML-with-BERT.
      */
     suspend fun generateResponse(
         query: String,
         username: String,
-        dbHelper: DatabaseHelper? = null
+        dbHelper: DatabaseHelper? = null,
+        isPersonalized: Boolean = true,
+        profile: com.example.dle_prototype.data.PersonalizationProfile? = null
     ): QaResponse {
         val cleanQuery = query.trim().lowercase()
+        val extractedTopics = extractTopics(query)
 
         // 0. Check for Elevated Visual QA Source (YOLO11n + OCR Multimodal Ingestion)
         if (query.contains("ELEVATED VISUAL QA SOURCE") || query.contains("YOLO11n") || cleanQuery.contains("extracted ocr") || cleanQuery.contains("visual regions")) {
-            return generateVisualQaResponse(query)
+            val visualResp = generateVisualQaResponse(query)
+            return visualResp.copy(
+                isPersonalized = isPersonalized,
+                extractedTopics = extractedTopics + listOf("#MultimodalAI", "#YOLO11n"),
+                motivationalPill = if (isPersonalized) "Visual Reasoning Activated" else null
+            )
         }
+
+        // 1. Fetch base response from telemetry queries or knowledge base
+        val rawResponse: QaResponse = generateCoreResponse(cleanQuery, username, dbHelper)
+
+        // If personalization is disabled, return pure curriculum reference mode
+        if (!isPersonalized) {
+            return rawResponse.copy(
+                isPersonalized = false,
+                extractedTopics = extractedTopics,
+                motivationalPill = "Standard Reference (Non-Personalized)",
+                traitConditioningSummary = null
+            )
+        }
+
+        // 2. Trait Conditioning & Motivational Scaffolding (from Secure-ML-with-BERT)
+        // Traits: Conscientiousness, Motivation, Understanding, Engagement
+        val uScore = profile?.understanding?.score ?: 0.72f
+        val mScore = profile?.motivation?.score ?: 0.85f
+        val cScore = profile?.conscientiousness?.score ?: 0.68f
+
+        val motivationalPrefix = when {
+            mScore < 0.50f -> "🌟 **PLI Motivational Cue**: Keep your momentum going! Every complex concept breaks down into bite-sized patterns. You're making real progress!\n\n"
+            mScore >= 0.80f -> "⚡ **PLI High-Drive Booster**: Fantastic enthusiasm! Channeling your high motivation directly into this concept:\n\n"
+            else -> "💡 **PLI Study Coach**: Here is your tailored cognitive breakdown:\n\n"
+        }
+
+        val understandingScaffold = when {
+            uScore < 0.55f -> "\n\n🧩 **Intuitive Analogy**: Think of this like everyday plumbing or circuit switches — focus on where data enters and where it exits before worrying about edge cases."
+            uScore >= 0.75f -> "\n\n🚀 **Architectural Deep-Dive**: Because your conceptual understanding is strong, note how this eliminates memory leaks by scoping lifecycles cleanly to the host context."
+            else -> ""
+        }
+
+        val habitNudge = when {
+            cScore < 0.50f -> "\n\n📅 **Habit Nudge**: Add this key takeaway to your daily 5-minute Spaced Repetition queue to lock it into permanent memory!"
+            else -> ""
+        }
+
+        val enrichedAnswer = motivationalPrefix + rawResponse.answer + understandingScaffold + habitNudge
+
+        val conditioningSummary = "Conditioned on Motivation (${(mScore * 10).toInt()}/10) & Understanding (${(uScore * 10).toInt()}/10)"
+
+        return rawResponse.copy(
+            answer = enrichedAnswer,
+            isPersonalized = true,
+            extractedTopics = extractedTopics,
+            motivationalPill = if (mScore < 0.50f) "Encouraging Scaffolding Active" else "High-Growth Mastery Active",
+            traitConditioningSummary = conditioningSummary
+        )
+    }
+
+    /**
+     * Resolves the unconditioned core knowledge base answer.
+     */
+    private suspend fun generateCoreResponse(
+        cleanQuery: String,
+        username: String,
+        dbHelper: DatabaseHelper?
+    ): QaResponse {
 
         // 1. Check for User Streak & Learning Stats Queries
         if (cleanQuery.contains("streak") || cleanQuery.contains("my stats") || cleanQuery.contains("progress") || cleanQuery.contains("how am i doing")) {

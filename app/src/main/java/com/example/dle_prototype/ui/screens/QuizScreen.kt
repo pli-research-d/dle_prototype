@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -997,8 +998,8 @@ fun QuizScreen(
                                 if (!isAnswerSubmitted && isSelected) {
                                     Text(
                                         text = when {
-                                            isDraggingThis && currentOffsetX > 40f -> "→ Confirm (Expected)"
-                                            isDraggingThis && currentOffsetX < -40f -> "← Guess (Low)"
+                                            isDraggingThis && currentOffsetX > 40f -> "→ Confirm"
+                                            isDraggingThis && currentOffsetX < -40f -> "← Guess"
                                             else -> "⇄ Drag"
                                         },
                                         style = MaterialTheme.typography.labelSmall,
@@ -1008,7 +1009,8 @@ fun QuizScreen(
                                             isDraggingThis && currentOffsetX < -40f -> AmberAccent
                                             else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                         },
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1
                                     )
                                 }
                             }
@@ -1188,13 +1190,13 @@ fun QuizScreen(
                                 lastSubmittedConfidence?.let { conf ->
                                     val (badgeText, badgeColor) = when {
                                         conf == AnswerConfidence.CERTAIN && isCorrect ->
-                                            Pair("Certain · Level Rewarded 🚀", EmeraldSuccess)
+                                            Pair("Certain · +Level 🚀", EmeraldSuccess)
                                         conf == AnswerConfidence.CERTAIN && !isCorrect ->
-                                            Pair("Certain · Level Reduced ⚠️", RoseAccent)
+                                            Pair("Certain · -Level ⚠️", RoseAccent)
                                         conf == AnswerConfidence.GUESSING && isCorrect ->
-                                            Pair("Guessing · Level Reduced 🎲", AmberAccent)
+                                            Pair("Guess · Level ↓ 🎲", AmberAccent)
                                         else ->
-                                            Pair("Guessing · Level Reduced ❌", RoseAccent)
+                                            Pair("Guess · Level ↓ ❌", RoseAccent)
                                     }
                                     Surface(
                                         color = badgeColor.copy(alpha = 0.2f),
@@ -1206,6 +1208,8 @@ fun QuizScreen(
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (badgeColor == AmberAccent) Color(0xFFD97706) else badgeColor,
                                             fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         )
                                     }

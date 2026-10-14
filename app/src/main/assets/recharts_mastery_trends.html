@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>30-Day Mastery Improvement Trends (Recharts)</title>
+  
+  <!-- React, ReactDOM, PropTypes, and Recharts CDN -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #070B14;
+      --card-bg: #0F172A;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #F1F5F9;
+      --text-muted: #94A3B8;
+      --cyan: #06B6D4;
+      --emerald: #10B981;
+      --amber: #F59E0B;
+      --purple: #8B5CF6;
+      --rose: #F43F5E;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    body {
+      background-color: transparent;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 0;
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    .container {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 4px 2px;
+    }
+
+    /* Controls Bar */
+    .controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill-group {
+      display: inline-flex;
+      background: #0B1120;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 9px;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .pill-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .pill-btn.active {
+      background: var(--cyan);
+      color: #070B14;
+      box-shadow: 0 1px 4px rgba(6, 182, 212, 0.3);
+    }
+
+    .pill-btn.active.emerald-pill {
+      background: var(--emerald);
+      color: #070B14;
+    }
+
+    .pill-btn.active.amber-pill {
+      background: var(--amber);
+      color: #070B14;
+    }
+
+    /* Summary Bar */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .summary-card {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 6px 4px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .summary-val {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+    }
+
+    .summary-lbl {
+      font-size: 9px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    /* Chart Container */
+    .chart-wrapper {
+      width: 100%;
+      height: 220px;
+      position: relative;
+      background: #070B14;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 8px 4px 2px 0;
+    }
+
+    /* Tooltip */
+    .custom-tooltip {
+      background: #090E1A;
+      border: 1px solid rgba(6, 182, 212, 0.5);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 11px;
+      color: #F1F5F9;
+      min-width: 150px;
+    }
+
+    .tooltip-date {
+      font-weight: 700;
+      color: #E2E8F0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 4px;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .tooltip-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 2px 0;
+    }
+
+    .tooltip-milestone {
+      margin-top: 4px;
+      padding: 2px 6px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 4px;
+      color: #10B981;
+      font-size: 9.5px;
+      font-weight: 600;
+    }
+
+    /* Legend */
+    .legend-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      padding: 2px 0;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="container">
+      <div id="chart-loading" style="padding: 30px; text-align: center; color: #94A3B8; font-size: 12px;">
+        Loading 30-Day Mastery Trends (Recharts)...
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 30-Day synthetic baseline progression data
+    function generateDefault30DayData() {
+      const data = [];
+      const now = new Date();
+      let mastery = 42.0;
+      let accuracy = 65.0;
+      let expert = 1;
+      let inter = 3;
+      let beg = 6;
+      let totalXp = 100;
+
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dayIdx = 30 - i;
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const dateLabel = `${monthNames[d.getMonth()]} ${d.getDate()}`;
+
+        // Organic progression curve
+        mastery = Math.min(94, Math.round((mastery + (0.9 + Math.sin(dayIdx * 0.4) * 0.5)) * 10) / 10);
+        accuracy = Math.min(98, Math.round((accuracy + (0.7 + Math.cos(dayIdx * 0.3) * 0.6)) * 10) / 10);
+
+        if (dayIdx === 8) { inter += 1; beg -= 1; }
+        if (dayIdx === 15) { expert += 1; inter -= 1; }
+        if (dayIdx === 21) { expert += 1; beg -= 1; }
+        if (dayIdx === 27) { expert += 2; inter -= 1; beg -= 1; }
+
+        const dayXp = 40 + Math.floor(Math.sin(dayIdx) * 20) + (dayIdx % 3 === 0 ? 35 : 0);
+        totalXp += dayXp;
+
+        let milestone = null;
+        if (dayIdx === 8) milestone = "🥈 Intermediate Breakthrough";
+        if (dayIdx === 15) milestone = "🥇 First Topic Reached Expert";
+        if (dayIdx === 25) milestone = "⚡ 7-Day Mastery Streak";
+        if (dayIdx === 30) milestone = "🚀 88% Mastery Milestone";
+
+        data.push({
+          dayNumber: dayIdx,
+          dateLabel: dateLabel,
+          masteryScore: mastery,
+          accuracyPercent: accuracy,
+          expertTopicsCount: expert,
+          intermediateTopicsCount: Math.max(1, inter),
+          beginnerTopicsCount: Math.max(0, beg),
+          xpEarned: dayXp,
+          quizzesTaken: 1 + (dayIdx % 4 === 0 ? 2 : 1),
+          focusMinutes: 15 + (dayIdx % 3) * 10,
+          highlightMilestone: milestone,
+          isToday: i === 0
+        });
+      }
+      return data;
+    }
+
+    let currentMasteryData = generateDefault30DayData();
+    let currentView = "mastery"; // "mastery" | "tiers" | "accuracy"
+    let currentDaysWindow = 30; // 30 | 14 | 7
+
+    function renderFallbackSvg(data, view) {
+      const container = document.getElementById('root');
+      if (!container) return;
+
+      const pts = data.slice(-currentDaysWindow);
+      const width = container.clientWidth || 360;
+      const height = 180;
+      const padLeft = 32;
+      const padRight = 16;
+      const padTop = 16;
+      const padBottom = 26;
+
+      const chartW = width - padLeft - padRight;
+      const chartH = height - padTop - padBottom;
+
+      const minVal = view === "tiers" ? 0 : 30;
+      const maxVal = view === "tiers" ? 10 : 100;
+
+      function getX(idx) {
+        return padLeft + (idx / Math.max(1, pts.length - 1)) * chartW;
+      }
+      function getY(val) {
+        return padTop + chartH - ((val - minVal) / (maxVal - minVal)) * chartH;
+      }
+
+      let pathD = "";
+      pts.forEach((p, i) => {
+        const val = view === "mastery" ? p.masteryScore : (view === "accuracy" ? p.accuracyPercent : p.expertTopicsCount);
+        const x = getX(i);
+        const y = getY(val);
+        pathD += (i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`);
+      });
+
+      const areaD = `${pathD} L ${getX(pts.length - 1)} ${padTop + chartH} L ${getX(0)} ${padTop + chartH} Z`;
+
+      const strokeColor = view === "mastery" ? "#06B6D4" : (view === "accuracy" ? "#10B981" : "#F59E0B");
+
+      const svgHtml = `
+        <div class="container">
+          <div class="controls-row">
+            <div style="font-size: 11px; font-weight: bold; color: #E2E8F0;">
+              📈 30-Day Mastery Improvement
+            </div>
+            <span style="font-size: 9.5px; color: #94A3B8; background: #0F172A; padding: 2px 6px; border-radius: 4px;">Canvas SVG Mode</span>
+          </div>
+          <div class="chart-wrapper">
+            <svg width="${width}" height="${height}" style="overflow: visible;">
+              <defs>
+                <linearGradient id="fallbackGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="${strokeColor}" stopOpacity="0.35"/>
+                  <stop offset="100%" stopColor="${strokeColor}" stopOpacity="0"/>
+                </linearGradient>
+              </defs>
+              <line x1="${padLeft}" y1="${getY(80)}" x2="${padLeft + chartW}" y2="${getY(80)}" stroke="rgba(16, 185, 129, 0.3)" stroke-dasharray="3 3"/>
+              <line x1="${padLeft}" y1="${getY(60)}" x2="${padLeft + chartW}" y2="${getY(60)}" stroke="rgba(6, 182, 212, 0.3)" stroke-dasharray="3 3"/>
+              <path d="${areaD}" fill="url(#fallbackGrad)" />
+              <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round"/>
+              ${pts.map((p, i) => {
+                if (i % 5 === 0 || i === pts.length - 1) {
+                  const val = view === "mastery" ? p.masteryScore : (view === "accuracy" ? p.accuracyPercent : p.expertTopicsCount);
+                  return `<circle cx="${getX(i)}" cy="${getY(val)}" r="3" fill="${strokeColor}"/>
+                          <text x="${getX(i)}" y="${height - 8}" fill="#94A3B8" font-size="9" text-anchor="middle">${p.dateLabel.split(' ')[1] || p.dayNumber}</text>`;
+                }
+                return '';
+              }).join('')}
+            </svg>
+          </div>
+        </div>
+      `;
+      container.innerHTML = svgHtml;
+    }
+
+    function renderRechartsComponent(data, view, daysWindow) {
+      if (!window.Recharts || !window.React || !window.ReactDOM) {
+        return false;
+      }
+
+      const {
+        ResponsiveContainer,
+        ComposedChart,
+        AreaChart,
+        LineChart,
+        Line,
+        Area,
+        Bar,
+        XAxis,
+        YAxis,
+        CartesianGrid,
+        Tooltip,
+        ReferenceLine,
+        Legend
+      } = window.Recharts;
+      const e = window.React.createElement;
+
+      function CustomTooltipContent({ active, payload, label }) {
+        if (!active || !payload || !payload.length) return null;
+        const pt = payload[0].payload;
+        return e('div', { className: 'custom-tooltip' },
+          e('div', { className: 'tooltip-date' },
+            e('span', null, `${pt.dateLabel}${pt.isToday ? ' (Today)' : ''}`),
+            e('span', { style: { color: '#06B6D4', fontWeight: 'bold' } }, `Day ${pt.dayNumber}`)
+          ),
+          e('div', { className: 'tooltip-row' },
+            e('span', { style: { color: '#94A3B8' } }, 'Mastery:'),
+            e('span', { style: { color: '#06B6D4', fontWeight: 'bold' } }, `${pt.masteryScore}%`)
+          ),
+          e('div', { className: 'tooltip-row' },
+            e('span', { style: { color: '#94A3B8' } }, 'Accuracy:'),
+            e('span', { style: { color: '#10B981', fontWeight: 'bold' } }, `${pt.accuracyPercent}%`)
+          ),
+          e('div', { className: 'tooltip-row' },
+            e('span', { style: { color: '#94A3B8' } }, 'Tiers (Exp/Int/Beg):'),
+            e('span', { style: { color: '#F1F5F9' } }, `${pt.expertTopicsCount} / ${pt.intermediateTopicsCount} / ${pt.beginnerTopicsCount}`)
+          ),
+          e('div', { className: 'tooltip-row' },
+            e('span', { style: { color: '#94A3B8' } }, 'Activity:'),
+            e('span', { style: { color: '#F59E0B' } }, `+${pt.xpEarned} XP · ${pt.quizzesTaken} qz`)
+          ),
+          pt.highlightMilestone ? e('div', { className: 'tooltip-milestone' }, pt.highlightMilestone) : null
+        );
+      }
+
+      function MasteryTrendsApp() {
+        const [activeView, setActiveView] = window.React.useState(view);
+        const [activeDays, setActiveDays] = window.React.useState(daysWindow);
+
+        const slicedData = window.React.useMemo(() => {
+          return data.slice(-activeDays);
+        }, [data, activeDays]);
+
+        const startPoint = slicedData[0] || {};
+        const latestPoint = slicedData[slicedData.length - 1] || {};
+        const masteryDelta = Math.round(((latestPoint.masteryScore || 0) - (startPoint.masteryScore || 0)) * 10) / 10;
+        const totalXp = slicedData.reduce((acc, d) => acc + (d.xpEarned || 0), 0);
+        const avgAccuracy = Math.round((slicedData.reduce((acc, d) => acc + (d.accuracyPercent || 0), 0) / Math.max(1, slicedData.length)) * 10) / 10;
+
+        return e('div', { className: 'container' },
+          // Top Controls: Metric view selector + Day span selector
+          e('div', { className: 'controls-row' },
+            e('div', { className: 'pill-group' },
+              e('button', {
+                className: `pill-btn ${activeView === 'mastery' ? 'active' : ''}`,
+                onClick: () => { setActiveView('mastery'); currentView = 'mastery'; }
+              }, 'Mastery Curve'),
+              e('button', {
+                className: `pill-btn ${activeView === 'tiers' ? 'active emerald-pill' : ''}`,
+                onClick: () => { setActiveView('tiers'); currentView = 'tiers'; }
+              }, 'Mastery Tiers'),
+              e('button', {
+                className: `pill-btn ${activeView === 'accuracy' ? 'active amber-pill' : ''}`,
+                onClick: () => { setActiveView('accuracy'); currentView = 'accuracy'; }
+              }, 'Accuracy & XP')
+            ),
+            e('div', { className: 'pill-group' },
+              e('button', {
+                className: `pill-btn ${activeDays === 30 ? 'active' : ''}`,
+                onClick: () => { setActiveDays(30); currentDaysWindow = 30; }
+              }, '30D'),
+              e('button', {
+                className: `pill-btn ${activeDays === 14 ? 'active' : ''}`,
+                onClick: () => { setActiveDays(14); currentDaysWindow = 14; }
+              }, '14D'),
+              e('button', {
+                className: `pill-btn ${activeDays === 7 ? 'active' : ''}`,
+                onClick: () => { setActiveDays(7); currentDaysWindow = 7; }
+              }, '7D')
+            )
+          ),
+
+          // 4-Card Summary Grid
+          e('div', { className: 'summary-grid' },
+            e('div', { className: 'summary-card' },
+              e('span', { className: 'summary-val', style: { color: '#06B6D4' } }, `${latestPoint.masteryScore || 0}%`),
+              e('span', { className: 'summary-lbl' }, 'Current Mastery')
+            ),
+            e('div', { className: 'summary-card' },
+              e('span', { className: 'summary-val', style: { color: '#10B981' } }, `+${masteryDelta}%`),
+              e('span', { className: 'summary-lbl' }, 'Growth')
+            ),
+            e('div', { className: 'summary-card' },
+              e('span', { className: 'summary-val', style: { color: '#F59E0B' } }, `${latestPoint.expertTopicsCount || 0} Exp`),
+              e('span', { className: 'summary-lbl' }, 'Expert Topics')
+            ),
+            e('div', { className: 'summary-card' },
+              e('span', { className: 'summary-val', style: { color: '#A855F7' } }, `+${totalXp}`),
+              e('span', { className: 'summary-lbl' }, 'Total XP')
+            )
+          ),
+
+          // Chart Render
+          e('div', { className: 'chart-wrapper' },
+            e(ResponsiveContainer, { width: '100%', height: '100%' },
+              activeView === 'mastery'
+                ? e(AreaChart, { data: slicedData, margin: { top: 8, right: 12, left: -14, bottom: 0 } },
+                    e('defs', null,
+                      e('linearGradient', { id: 'masteryGrad', x1: '0', y1: '0', x2: '0', y2: '1' },
+                        e('stop', { offset: '0%', stopColor: '#06B6D4', stopOpacity: 0.45 }),
+                        e('stop', { offset: '95%', stopColor: '#06B6D4', stopOpacity: 0.0 })
+                      )
+                    ),
+                    e(CartesianGrid, { strokeDasharray: '3 3', stroke: 'rgba(255, 255, 255, 0.05)', vertical: false }),
+                    e(XAxis, {
+                      dataKey: 'dateLabel',
+                      stroke: '#64748B',
+                      tick: { fill: '#94A3B8', fontSize: 9.5 },
+                      tickLine: false,
+                      axisLine: { stroke: 'rgba(255, 255, 255, 0.08)' }
+                    }),
+                    e(YAxis, {
+                      domain: [20, 100],
+                      stroke: '#06B6D4',
+                      tick: { fill: '#94A3B8', fontSize: 9.5 },
+                      tickLine: false,
+                      axisLine: false,
+                      unit: '%'
+                    }),
+                    e(Tooltip, { content: e(CustomTooltipContent) }),
+                    e(ReferenceLine, {
+                      y: 80,
+                      stroke: '#10B981',
+                      strokeDasharray: '4 4',
+                      label: { value: 'Expert Tier (80%)', fill: '#10B981', fontSize: 9, position: 'insideTopLeft' }
+                    }),
+                    e(ReferenceLine, {
+                      y: 60,
+                      stroke: '#06B6D4',
+                      strokeDasharray: '4 4',
+                      label: { value: 'Intermediate (60%)', fill: '#06B6D4', fontSize: 9, position: 'insideBottomLeft' }
+                    }),
+                    e(Area, {
+                      type: 'monotone',
+                      dataKey: 'masteryScore',
+                      stroke: '#06B6D4',
+                      strokeWidth: 2.5,
+                      fill: 'url(#masteryGrad)',
+                      dot: false,
+                      activeDot: { r: 5, fill: '#06B6D4', stroke: '#F1F5F9', strokeWidth: 1.5 }
+                    })
+                  )
+                : activeView === 'tiers'
+                ? e(AreaChart, { data: slicedData, margin: { top: 8, right: 12, left: -20, bottom: 0 } },
+                    e('defs', null,
+                      e('linearGradient', { id: 'expertGrad', x1: '0', y1: '0', x2: '0', y2: '1' },
+                        e('stop', { offset: '0%', stopColor: '#10B981', stopOpacity: 0.5 }),
+                        e('stop', { offset: '95%', stopColor: '#10B981', stopOpacity: 0.05 })
+                      ),
+                      e('linearGradient', { id: 'interGrad', x1: '0', y1: '0', x2: '0', y2: '1' },
+                        e('stop', { offset: '0%', stopColor: '#06B6D4', stopOpacity: 0.4 }),
+                        e('stop', { offset: '95%', stopColor: '#06B6D4', stopOpacity: 0.05 })
+                      ),
+                      e('linearGradient', { id: 'begGrad', x1: '0', y1: '0', x2: '0', y2: '1' },
+                        e('stop', { offset: '0%', stopColor: '#F59E0B', stopOpacity: 0.35 }),
+                        e('stop', { offset: '95%', stopColor: '#F59E0B', stopOpacity: 0.05 })
+                      )
+                    ),
+                    e(CartesianGrid, { strokeDasharray: '3 3', stroke: 'rgba(255, 255, 255, 0.05)', vertical: false }),
+                    e(XAxis, {
+                      dataKey: 'dateLabel',
+                      stroke: '#64748B',
+                      tick: { fill: '#94A3B8', fontSize: 9.5 },
+                      tickLine: false,
+                      axisLine: { stroke: 'rgba(255, 255, 255, 0.08)' }
+                    }),
+                    e(YAxis, {
+                      domain: [0, 10],
+                      stroke: '#94A3B8',
+                      tick: { fill: '#94A3B8', fontSize: 9.5 },
+                      tickLine: false,
+                      axisLine: false
+                    }),
+                    e(Tooltip, { content: e(CustomTooltipContent) }),
+                    e(Area, {
+                      type: 'monotone',
+                      dataKey: 'expertTopicsCount',
+                      name: 'Expert',
+                      stroke: '#10B981',
+                      strokeWidth: 2,
+                      fill: 'url(#expertGrad)',
+                      dot: false
+                    }),
+                    e(Area, {
+                      type: 'monotone',
+                      dataKey: 'intermediateTopicsCount',
+                      name: 'Intermediate',
+                      stroke: '#06B6D4',
+                      strokeWidth: 2,
+                      fill: 'url(#interGrad)',
+                      dot: false
+                    }),
+                    e(Area, {
+                      type: 'monotone',
+                      dataKey: 'beginnerTopicsCount',
+                      name: 'Beginner',
+                      stroke: '#F59E0B',
+                      strokeWidth: 2,
+                      fill: 'url(#begGrad)',
+                      dot: false
+                    })
+                  )
+                : e(ComposedChart, { data: slicedData, margin: { top: 8, right: 12, left: -14, bottom: 0 } },
+                    e(CartesianGrid, { strokeDasharray: '3 3', stroke: 'rgba(255, 255, 255, 0.05)', vertical: false }),
+                    e(XAxis, {
+                      dataKey: 'dateLabel',
+                      stroke: '#64748B',
+                      tick: { fill: '#94A3B8', fontSize: 9.5 },
+                      tickLine: false,
+                      axisLine: { stroke: 'rgba(255, 255, 255, 0.08)' }
+                    }),
+                    e(YAxis, {
+                      yAxisId: 'acc',
+                      domain: [50, 100],
+                      stroke: '#10B981',
+                      tick: { fill: '#10B981', fontSize: 9.5 },
+                      tickLine: false,
+                      axisLine: false,
+                      unit: '%'
+                    }),
+                    e(YAxis, {
+                      yAxisId: 'xp',
+                      orientation: 'right',
+                      domain: [0, 120],
+                      stroke: '#F59E0B',
+                      tick: { fill: '#F59E0B', fontSize: 9.5 },
+                      tickLine: false,
+                      axisLine: false
+                    }),
+                    e(Tooltip, { content: e(CustomTooltipContent) }),
+                    e(Bar, {
+                      yAxisId: 'xp',
+                      dataKey: 'xpEarned',
+                      fill: 'rgba(245, 158, 11, 0.4)',
+                      radius: [3, 3, 0, 0]
+                    }),
+                    e(Line, {
+                      yAxisId: 'acc',
+                      type: 'monotone',
+                      dataKey: 'accuracyPercent',
+                      stroke: '#10B981',
+                      strokeWidth: 2.5,
+                      dot: false,
+                      activeDot: { r: 5, fill: '#10B981', stroke: '#F1F5F9', strokeWidth: 1.5 }
+                    })
+                  )
+            )
+          ),
+
+          // Legend Indicators
+          activeView === 'tiers'
+            ? e('div', { className: 'legend-row' },
+                e('div', { className: 'legend-item' },
+                  e('div', { className: 'legend-dot', style: { background: '#10B981' } }),
+                  e('span', null, 'Expert Topics')
+                ),
+                e('div', { className: 'legend-item' },
+                  e('div', { className: 'legend-dot', style: { background: '#06B6D4' } }),
+                  e('span', null, 'Intermediate')
+                ),
+                e('div', { className: 'legend-item' },
+                  e('div', { className: 'legend-dot', style: { background: '#F59E0B' } }),
+                  e('span', null, 'Beginner')
+                )
+              )
+            : activeView === 'accuracy'
+            ? e('div', { className: 'legend-row' },
+                e('div', { className: 'legend-item' },
+                  e('div', { className: 'legend-dot', style: { background: '#10B981' } }),
+                  e('span', null, 'Daily Accuracy (%)')
+                ),
+                e('div', { className: 'legend-item' },
+                  e('div', { className: 'legend-dot', style: { background: '#F59E0B' } }),
+                  e('span', null, 'Daily XP Gained')
+                )
+              )
+            : e('div', { className: 'legend-row' },
+                e('div', { className: 'legend-item' },
+                  e('div', { className: 'legend-dot', style: { background: '#06B6D4' } }),
+                  e('span', null, '30-Day Mastery Improvement')
+                ),
+                e('div', { className: 'legend-item' },
+                  e('div', { className: 'legend-dot', style: { background: '#10B981' } }),
+                  e('span', null, 'Expert Threshold (≥80%)')
+                )
+              )
+        );
+      }
+
+      const rootElem = document.getElementById('root');
+      if (rootElem) {
+        const root = window._reactRoot || window.ReactDOM.createRoot(rootElem);
+        window._reactRoot = root;
+        root.render(e(MasteryTrendsApp));
+        return true;
+      }
+      return false;
+    }
+
+    function refreshChart() {
+      const rendered = renderRechartsComponent(currentMasteryData, currentView, currentDaysWindow);
+      if (!rendered) {
+        renderFallbackSvg(currentMasteryData, currentView);
+      }
+    }
+
+    // Android WebView Javascript Bridge
+    window.updateMasteryTrendsData = function(jsonPayload) {
+      try {
+        const parsed = (typeof jsonPayload === 'string') ? JSON.parse(jsonPayload) : jsonPayload;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          currentMasteryData = parsed;
+          refreshChart();
+        }
+      } catch (err) {
+        console.error("Error updating mastery data:", err);
+      }
+    };
+
+    window.setMetricView = function(view) {
+      currentView = view;
+      refreshChart();
+    };
+
+    window.setTimeWindow = function(days) {
+      currentDaysWindow = days;
+      refreshChart();
+    };
+
+    // Auto-initialize once DOM is ready and retry Recharts if bundle is loading
+    document.addEventListener("DOMContentLoaded", () => {
+      refreshChart();
+
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (window.Recharts && window.React && window.ReactDOM) {
+          renderRechartsComponent(currentMasteryData, currentView, currentDaysWindow);
+          clearInterval(interval);
+        } else if (attempts > 20) {
+          clearInterval(interval);
+        }
+      }, 150);
+    });
+  </script>
+</body>
+</html>

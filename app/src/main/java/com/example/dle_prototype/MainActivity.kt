@@ -27,6 +27,7 @@ import com.example.dle_prototype.ui.screens.DiagnosticsScreen
 import com.example.dle_prototype.ui.screens.FederatedLabScreen
 import com.example.dle_prototype.ui.screens.FlashcardReviewScreen
 import com.example.dle_prototype.ui.screens.FocusSessionScreen
+import com.example.dle_prototype.ui.screens.MoodleSandboxScreen
 import com.example.dle_prototype.ui.screens.QaChatScreen
 import com.example.dle_prototype.ui.screens.QuizScreen
 import com.example.dle_prototype.ui.screens.SettingsScreen
@@ -49,6 +50,7 @@ sealed class Screen {
     data object UxTestView : Screen()
     data object Settings : Screen()
     data object QaChat : Screen()
+    data object MoodleSandbox : Screen()
 }
 
 class MainActivity : ComponentActivity() {
@@ -75,7 +77,13 @@ class MainActivity : ComponentActivity() {
         com.example.dle_prototype.notifications.PeakStudyNotificationManager.createNotificationChannel(this)
         com.example.dle_prototype.notifications.PeakStudyNotificationManager.syncAndSchedulePeakStudyAlert(this, dbHelper)
 
+        // Initialize and sync knowledge graph spaced repetition reinforcement notifications
+        com.example.dle_prototype.notifications.KnowledgeSpacedRepetitionNotificationManager.createNotificationChannel(this)
+        com.example.dle_prototype.notifications.KnowledgeSpacedRepetitionNotificationManager.syncAndScheduleKnowledgeReinforcementAlert(this, dbHelper)
+
         val startQuizFromNotification = intent?.getBooleanExtra("EXTRA_START_QUIZ", false) ?: false
+        val initialCategoryName = intent?.getStringExtra("EXTRA_CATEGORY_NAME")
+        val initialCategoryNumber = intent?.getFloatExtra("EXTRA_CATEGORY_NUMBER", 1f) ?: 1f
 
         setContent {
             val context = LocalContext.current
@@ -86,6 +94,8 @@ class MainActivity : ComponentActivity() {
                     DleApp(
                         dbHelper = dbHelper,
                         startQuizImmediately = startQuizFromNotification,
+                        initialCategoryName = initialCategoryName,
+                        initialCategoryNumber = initialCategoryNumber,
                         onUserChanged = { user ->
                             activeUsername = user?.username
                             activeSettings = if (user != null) {
@@ -122,6 +132,8 @@ class MainActivity : ComponentActivity() {
 fun DleApp(
     dbHelper: DatabaseHelper,
     startQuizImmediately: Boolean = false,
+    initialCategoryName: String? = null,
+    initialCategoryNumber: Float = 1f,
     onUserChanged: (User?) -> Unit,
     onThemeSettingsChanged: (com.example.dle_prototype.data.UserSettings) -> Unit = {}
 ) {
@@ -141,7 +153,7 @@ fun DleApp(
                         currentUser = user
                         onUserChanged(user)
                         currentScreen = if (startQuizImmediately) {
-                            Screen.Quiz("General Science", 1f)
+                            Screen.Quiz(initialCategoryName ?: "General Science", initialCategoryNumber)
                         } else {
                             Screen.Dashboard
                         }
@@ -185,6 +197,9 @@ fun DleApp(
                         },
                         onOpenQaChat = {
                             currentScreen = Screen.QaChat
+                        },
+                        onOpenMoodleSandbox = {
+                            currentScreen = Screen.MoodleSandbox
                         },
                         onThemeSettingsChanged = onThemeSettingsChanged,
                         onLogout = {
@@ -313,6 +328,19 @@ fun DleApp(
                 currentUser?.let { user ->
                     QaChatScreen(
                         username = user.username,
+                        dbHelper = dbHelper,
+                        onBack = {
+                            currentScreen = Screen.Dashboard
+                        }
+                    )
+                } ?: run {
+                    currentScreen = Screen.Auth
+                }
+            }
+            is Screen.MoodleSandbox -> {
+                currentUser?.let { user ->
+                    MoodleSandboxScreen(
+                        user = user,
                         dbHelper = dbHelper,
                         onBack = {
                             currentScreen = Screen.Dashboard

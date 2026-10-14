@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -37,6 +38,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -95,8 +98,44 @@ fun FederatedLabScreen(
     var isAggregating by remember { mutableStateOf(false) }
     var aggregationResultMsg by remember { mutableStateOf<String?>(null) }
     var showInspector by remember { mutableStateOf(false) }
+    var blendAlpha by remember { mutableStateOf(0.65f) }
+    var isBlending by remember { mutableStateOf(false) }
+    var blendResultMsg by remember { mutableStateOf<String?>(null) }
 
     BackHandler { onBack() }
+
+    fun blendWeights(local: ModelWeights, globalBase: ModelWeights, alpha: Float): ModelWeights {
+        val countW1Rows = local.w1.size
+        val countW1Cols = local.w1[0].size
+        val blendedW1 = Array(countW1Rows) { i ->
+            FloatArray(countW1Cols) { j ->
+                alpha * local.w1[i][j] + (1f - alpha) * globalBase.w1[i][j]
+            }
+        }
+        val blendedB1 = FloatArray(local.b1.size) { i ->
+            alpha * local.b1[i] + (1f - alpha) * globalBase.b1[i]
+        }
+        val countW2Rows = local.w2.size
+        val countW2Cols = local.w2[0].size
+        val blendedW2 = Array(countW2Rows) { i ->
+            FloatArray(countW2Cols) { j ->
+                alpha * local.w2[i][j] + (1f - alpha) * globalBase.w2[i][j]
+            }
+        }
+        val blendedB2 = FloatArray(local.b2.size) { i ->
+            alpha * local.b2[i] + (1f - alpha) * globalBase.b2[i]
+        }
+        return ModelWeights(
+            w1 = blendedW1,
+            b1 = blendedB1,
+            w2 = blendedW2,
+            b2 = blendedB2,
+            version = local.version + 1,
+            trainedEpochs = local.trainedEpochs,
+            finalLoss = local.finalLoss,
+            updatedAt = System.currentTimeMillis()
+        )
+    }
 
     fun computeDivergence(wA: ModelWeights, wB: ModelWeights): Float {
         var sumSquares = 0.0
@@ -452,6 +491,223 @@ fun FederatedLabScreen(
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium
                         )
+                    }
+                }
+            }
+
+            // =====================================================================
+            // LOCAL / GLOBAL MODEL WEIGHT BLENDING SECTION (average_models from Repo)
+            // =====================================================================
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("fed_weight_blending_card"),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 2.dp,
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    CyanAccent.copy(alpha = 0.4f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Tune,
+                                contentDescription = null,
+                                tint = CyanAccent,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Local / Global Weight Blending",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Based on average_models from Secure-ML-with-BERT",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = CyanAccent.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "α = ${"%.2f".format(blendAlpha)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = CyanAccent,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Interpolate model parameter vectors between your private local weights (θ_local) and the standardized global curriculum baseline (θ_global). Formula: θ_blend = α · θ_local + (1 - α) · θ_global",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 18.sp
+                    )
+
+                    // Blend Percentage Visual Gauges
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            color = IndigoPrimaryLight.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, IndigoPrimaryLight.copy(alpha = 0.35f))
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text("Local Personalization", fontSize = 10.sp, color = IndigoPrimaryLight, fontWeight = FontWeight.Bold)
+                                Text("${(blendAlpha * 100).toInt()}%", fontSize = 16.sp, fontWeight = FontWeight.Black, color = IndigoPrimaryLight)
+                                Text("Adapts to individual speed", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
+                        Surface(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            color = AmberAccent.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AmberAccent.copy(alpha = 0.35f))
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text("Global Curriculum Base", fontSize = 10.sp, color = AmberAccent, fontWeight = FontWeight.Bold)
+                                Text("${((1f - blendAlpha) * 100).toInt()}%", fontSize = 16.sp, fontWeight = FontWeight.Black, color = AmberAccent)
+                                Text("Prevents catastrophic drift", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+
+                    // Interactive Blend Slider
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("100% Global Knowledge", fontSize = 10.sp, color = AmberAccent)
+                            Text("Balanced (50/50)", fontSize = 10.sp, color = CyanAccent)
+                            Text("100% Hyper-Personal", fontSize = 10.sp, color = IndigoPrimaryLight)
+                        }
+
+                        Slider(
+                            value = blendAlpha,
+                            onValueChange = { blendAlpha = it },
+                            valueRange = 0.0f..1.0f,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("fed_alpha_blend_slider"),
+                            colors = SliderDefaults.colors(
+                                thumbColor = CyanAccent,
+                                activeTrackColor = CyanAccent,
+                                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        )
+                    }
+
+                    // Qualitative Status Indicator
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = when {
+                                blendAlpha > 0.80f -> "⚡ Mode: Hyper-Personalized (High sensitivity to individual study rhythm; slight variance on novel curriculum topics)."
+                                blendAlpha < 0.25f -> "🏛️ Mode: Standardized Curriculum (Strict adherence to reference knowledge; reduced individual habit adaptation)."
+                                else -> "⚖️ Mode: Optimal Balanced Consensus (Golden ratio between personal speed and curriculum standards)."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(10.dp),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    // Apply Blended Parameters Action Button
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                isBlending = true
+                                val local = localWeights ?: ModelWeights.defaultInit(5, 8, 4)
+                                val globalBase = ModelWeights.defaultInit(5, 8, 4)
+
+                                val blended = blendWeights(local, globalBase, blendAlpha)
+                                dbHelper.saveModelWeights(user.username, blended)
+                                localWeights = blended
+
+                                // Update peer divergences
+                                peers = peers.map {
+                                    it.copy(divergenceFromLocal = computeDivergence(blended, it.weights))
+                                }
+
+                                isBlending = false
+                                blendResultMsg = "Successfully blended weights with α = ${"%.2f".format(blendAlpha)}! Active local inference engine updated to v${blended.version}."
+                            }
+                        },
+                        enabled = !isBlending,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("apply_blended_weights_button"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = CyanAccent,
+                            contentColor = Color(0xFF090E1A)
+                        )
+                    ) {
+                        if (isBlending) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = Color(0xFF090E1A),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Interpolating Tensor Parameters...", fontWeight = FontWeight.Bold)
+                        } else {
+                            Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Apply Blended Weights to Local Model", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    blendResultMsg?.let { msg ->
+                        Surface(
+                            color = CyanAccent.copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CyanAccent),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = msg,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 }
             }

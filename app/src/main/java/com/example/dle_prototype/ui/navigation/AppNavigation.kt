@@ -217,6 +217,9 @@ fun AppNavigation(
     var leaderboardScope by remember { mutableStateOf(LeaderboardScope.GLOBAL) }
     var leaderboardSort by remember { mutableStateOf(LeaderboardSort.STREAK) }
     var latencySnapshot by remember { mutableStateOf<InferenceLatencySnapshot?>(null) }
+    var spacedRepetitionOverview by remember { mutableStateOf<com.example.dle_prototype.data.ml.SpacedRepetitionOverview?>(null) }
+    var knowledgeReinforcementSummary by remember { mutableStateOf<com.example.dle_prototype.data.graph.KnowledgeSpacedRepetitionSummary?>(null) }
+    var digitalBadges by remember { mutableStateOf<List<com.example.dle_prototype.data.badges.DigitalBadge>>(emptyList()) }
 
     LaunchedEffect(user.username) {
         val tele = dbHelper.getTelemetry(user.username)
@@ -231,6 +234,10 @@ fun AppNavigation(
         dueCardsCount = dbHelper.getDueFlashcards(user.username).size
         focusSessions = dbHelper.getStudySessions(user.username, 10)
         leaderboardEntries = dbHelper.getLeaderboardEntries(user.username, leaderboardScope, leaderboardSort)
+        spacedRepetitionOverview = dbHelper.getSpacedRepetitionOverview(user.username)
+        knowledgeReinforcementSummary = dbHelper.getKnowledgeSpacedRepetitionSummary(user.username)
+        val badgeResult = dbHelper.checkAndAwardBadges(user.username)
+        digitalBadges = badgeResult.allBadges
         latencySnapshot = InferenceLatencyTracker.profileInference(
             context = context,
             telemetry = tele,
@@ -334,6 +341,8 @@ fun AppNavigation(
                     dbHelper = dbHelper,
                     recentAttempts = recentAttempts,
                     dueCardsCount = dueCardsCount,
+                    spacedRepetitionOverview = spacedRepetitionOverview,
+                    knowledgeReinforcementSummary = knowledgeReinforcementSummary,
                     onStartQuiz = onStartQuiz,
                     onOpenFocus = onOpenFocus,
                     onOpenQaChat = onOpenQaChat
@@ -396,7 +405,16 @@ fun AppNavigation(
                         }
                     },
                     onStartQuiz = { onStartQuiz("JavaScript", 3f) },
-                    focusSessions = focusSessions
+                    onStartQuizWithCategory = onStartQuiz,
+                    onOpenQaChat = onOpenQaChat,
+                    focusSessions = focusSessions,
+                    digitalBadges = digitalBadges,
+                    knowledgeReinforcementSummary = knowledgeReinforcementSummary,
+                    userSettings = userSettings,
+                    onSettingsUpdated = { updated ->
+                        userSettings = updated
+                        UserSettingsManager.saveSettings(context, user.username, updated)
+                    }
                 )
             }
 
@@ -418,7 +436,8 @@ fun AppNavigation(
                     latencySnapshot = latencySnapshot,
                     onClearCache = {},
                     onLogout = onLogout,
-                    onOpenQaChat = onOpenQaChat
+                    onOpenQaChat = onOpenQaChat,
+                    onStartQuizWithCategory = { cat, num -> onStartQuiz(cat, num) }
                 )
             }
         }

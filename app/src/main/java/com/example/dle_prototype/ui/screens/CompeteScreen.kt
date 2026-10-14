@@ -76,6 +76,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.dle_prototype.data.DatabaseHelper
@@ -441,7 +442,10 @@ private fun LeagueTabView(
                     text = "Rival Target: You're 40 XP behind $pinnedRival!",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFFE9D5FF)
+                    color = Color(0xFFE9D5FF),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -451,11 +455,12 @@ private fun LeagueTabView(
         // Zone bands legend
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("▲ Top 5: Promotion", fontSize = 10.sp, color = EmeraldSuccess, fontWeight = FontWeight.Bold)
-            Text("Safe Zone (6-20)", fontSize = 10.sp, color = Color(0xFF94A3B8))
-            Text("▼ Bottom 5: Relegation", fontSize = 10.sp, color = RoseAccent, fontWeight = FontWeight.Bold)
+            Text("▲ Top 5: Promotion", fontSize = 10.sp, color = EmeraldSuccess, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text("Safe (6-20)", fontSize = 10.sp, color = Color(0xFF94A3B8), maxLines = 1)
+            Text("▼ Bottom 5: Relegation", fontSize = 10.sp, color = RoseAccent, fontWeight = FontWeight.Bold, maxLines = 1)
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -485,7 +490,11 @@ private fun LeagueTabView(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
                             Text(
                                 text = "#$rank",
                                 fontWeight = FontWeight.Black,
@@ -499,20 +508,25 @@ private fun LeagueTabView(
                                 modifier = Modifier.width(28.dp)
                             )
                             Text(entry.avatarEmoji, fontSize = 16.sp)
-                            Column {
+                            Column(modifier = Modifier.weight(1f, fill = false)) {
                                 Text(
                                     text = if (isUser) "You" else entry.displayName,
                                     fontWeight = if (isUser) FontWeight.Black else FontWeight.SemiBold,
                                     fontSize = 13.sp,
-                                    color = if (isUser) CyanAccent else Color.White
+                                    color = if (isUser) CyanAccent else Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = if (isUser) "🔥 ${entry.dailyStreak} streak" else "🔥 ${entry.dailyStreak} streak · ${entry.dominantTrait}",
                                     fontSize = 10.sp,
-                                    color = Color(0xFF94A3B8)
+                                    color = Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "${entry.totalScore} XP",
                             fontWeight = FontWeight.Bold,
@@ -689,18 +703,31 @@ private fun FriendsTabView(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         Text(peer.avatarEmoji, fontSize = 20.sp)
-                        Column {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
                             Text(
                                 text = displayName,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
-                                color = if (isUser) CyanAccent else Color.White
+                                color = if (isUser) CyanAccent else Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                            Text("$weeklyXp XP · 🔥 ${peer.dailyStreak}d streak · ${peer.dominantTrait}", fontSize = 11.sp, color = AmberAccent)
+                            Text(
+                                text = "$weeklyXp XP · 🔥 ${peer.dailyStreak}d streak · ${peer.dominantTrait}",
+                                fontSize = 11.sp,
+                                color = AmberAccent,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = { onPinRival(displayName) },
                         colors = ButtonDefaults.buttonColors(
@@ -838,7 +865,11 @@ private fun SeasonTabView(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         Text(
                             text = "#${idx + 1}",
                             fontWeight = FontWeight.Black,
@@ -852,20 +883,25 @@ private fun SeasonTabView(
                             modifier = Modifier.width(24.dp)
                         )
                         Text(peer.avatarEmoji, fontSize = 16.sp)
-                        Column {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
                             Text(
                                 text = displayName,
                                 fontWeight = if (isUser) FontWeight.Black else FontWeight.Bold,
                                 fontSize = 13.sp,
-                                color = if (isUser) CyanAccent else Color.White
+                                color = if (isUser) CyanAccent else Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = if (isUser) "Season Level ${(currentXp / 100).coerceAtLeast(1)} · Active Competitor" else "Season Level ${(peer.totalScore / 100).coerceAtLeast(1)} · ${peer.dominantTrait}",
                                 fontSize = 10.sp,
-                                color = Color(0xFF94A3B8)
+                                color = Color(0xFF94A3B8),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (isUser) "$currentXp XP" else "${peer.totalScore} XP",
                         fontWeight = FontWeight.Bold,
@@ -890,7 +926,11 @@ private fun SeasonTabView(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         Surface(
                             shape = CircleShape,
                             color = if (tier.isUnlocked) EmeraldSuccess.copy(alpha = 0.2f) else Color(0xFF1E293B),
@@ -900,11 +940,25 @@ private fun SeasonTabView(
                                 Text("${tier.level}", fontWeight = FontWeight.Black, fontSize = 13.sp, color = if (tier.isUnlocked) EmeraldSuccess else Color(0xFF64748B))
                             }
                         }
-                        Column {
-                            Text("Free: ${tier.freeReward}", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
-                            Text("Bonus: ${tier.bonusReward}", fontSize = 11.sp, color = Color(0xFFA855F7))
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                            Text(
+                                text = "Free: ${tier.freeReward}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Bonus: ${tier.bonusReward}",
+                                fontSize = 11.sp,
+                                color = Color(0xFFA855F7),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     if (tier.isUnlocked) {
                         Text("Unlocked ✅", color = EmeraldSuccess, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     } else {

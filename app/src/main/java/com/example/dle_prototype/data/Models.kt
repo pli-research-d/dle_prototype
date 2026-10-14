@@ -28,12 +28,48 @@ data class QuizAttempt(
 )
 
 data class LearningTelemetry(
-    val loginCount: Int,
-    val totalTimeMinutes: Float,
-    val lastQuizScore: Float,
-    val lastDifficultyReached: Float,
-    val lastCategorySelected: Float
-)
+    val loginCount: Int = 1,
+    val totalTimeMinutes: Float = 0.5f,
+    val lastQuizScore: Float = 0f,
+    val lastDifficultyReached: Float = 1f,
+    val lastCategorySelected: Float = 1f,
+    // 9-feature interaction telemetry dimensions matching Secure-ML-with-BERT:
+    val pageVisits: Int = 12,
+    val searchQueries: Int = 4,
+    val activityCompletionRate: Float = 85.0f, // 0..100%
+    val reactionsPositive: Int = 3,
+    val reactionsNegative: Int = 1,
+    val feedbackRating: Float = 8.5f,          // 0..10 scale
+    val isEncryptedInSandbox: Boolean = true,
+    val sandboxToken: String = "data_0"
+) {
+    /**
+     * Returns the 9-dimensional normalized float array matching calculate_learning_measures in Secure-ML-with-BERT:
+     * [logins, time_spent, page_visits, search_queries, activity_completion, quiz_score, reactions_pos, reactions_neg, feedback]
+     */
+    fun to9FeatureArray(): FloatArray = floatArrayOf(
+        loginCount.toFloat(),
+        totalTimeMinutes,
+        pageVisits.toFloat(),
+        searchQueries.toFloat(),
+        activityCompletionRate,
+        lastQuizScore,
+        reactionsPositive.toFloat(),
+        reactionsNegative.toFloat(),
+        feedbackRating
+    )
+
+    /**
+     * Standard 5-feature vector for backwards-compatible model checkpoints.
+     */
+    fun to5FeatureArray(): FloatArray = floatArrayOf(
+        loginCount.toFloat(),
+        totalTimeMinutes,
+        lastQuizScore,
+        lastDifficultyReached,
+        lastCategorySelected
+    )
+}
 
 data class TraitScore(
     val name: String,

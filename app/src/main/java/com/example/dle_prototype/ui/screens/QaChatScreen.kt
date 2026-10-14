@@ -28,6 +28,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -142,6 +143,7 @@ fun QaChatScreen(
     var isGenerating by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     var activeFollowUps by remember { mutableStateOf<List<String>>(emptyList()) }
+    var isPersonalizationActive by remember { mutableStateOf(true) }
 
     // Visual QA Source (Camera / Upload / Presets with YOLO11n + OCR)
     var activeVisualSource by remember { mutableStateOf<VisualQaSource?>(null) }
@@ -277,7 +279,12 @@ fun QaChatScreen(
             isGenerating = true
 
             try {
-                val response = QaChatEngine.generateResponse(promptToSend, username, dbHelper)
+                val response = QaChatEngine.generateResponse(
+                    query = promptToSend,
+                    username = username,
+                    dbHelper = dbHelper,
+                    isPersonalized = isPersonalizationActive
+                )
                 val assistantTimestamp = System.currentTimeMillis()
 
                 // Construct full message payload
@@ -383,6 +390,25 @@ fun QaChatScreen(
                     }
                 },
                 actions = {
+                    // Personalization Toggle from Secure-ML-with-BERT
+                    IconButton(
+                        onClick = {
+                            isPersonalizationActive = !isPersonalizationActive
+                            val toastMsg = if (isPersonalizationActive) {
+                                "Personalization enabled: Adaptive tone conditioned on your learning traits"
+                            } else {
+                                "Personalization disabled: Standard neutral reference mode"
+                            }
+                            Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.testTag("qa_toggle_personalization_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Psychology,
+                            contentDescription = "Toggle Personalization",
+                            tint = if (isPersonalizationActive) CyanAccent else Color(0xFF64748B)
+                        )
+                    }
                     IconButton(
                         onClick = { showPresetDialog = true },
                         modifier = Modifier.testTag("qa_top_presets_button")
@@ -561,7 +587,9 @@ fun QaChatScreen(
                                 Text(
                                     text = if (activeVisualSource != null) "Ask about this visual source..." else "Ask code, concepts, or stats...",
                                     color = Color(0xFF64748B),
-                                    fontSize = 13.sp
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             },
                             modifier = Modifier
@@ -635,6 +663,67 @@ fun QaChatScreen(
                         fontSize = 11.sp,
                         color = Color(0xFF94A3B8)
                     )
+                }
+            }
+
+            // PLI Trait Conditioning & Personalization Status Banner (Secure-ML-with-BERT)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        isPersonalizationActive = !isPersonalizationActive
+                        val toastMsg = if (isPersonalizationActive) {
+                            "Personalization enabled: Adaptive tone conditioned on your learning traits"
+                        } else {
+                            "Personalization disabled: Standard neutral reference mode"
+                        }
+                        Toast.makeText(context, toastMsg, Toast.LENGTH_SHORT).show()
+                    }
+                    .testTag("qa_personalization_status_banner"),
+                color = if (isPersonalizationActive) CyanAccent.copy(alpha = 0.10f) else Color(0xFF1E293B).copy(alpha = 0.5f),
+                border = BorderStroke(1.dp, if (isPersonalizationActive) CyanAccent.copy(alpha = 0.35f) else Color(0xFF334155))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = if (isPersonalizationActive) CyanAccent else Color(0xFF94A3B8),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = if (isPersonalizationActive) {
+                                "PLI Trait Conditioning: ON (Motivational Scaffolding)"
+                            } else {
+                                "Standard Mode: OFF (Neutral Reference)"
+                            },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isPersonalizationActive) CyanAccent else Color(0xFF94A3B8),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (isPersonalizationActive) EmeraldSuccess.copy(alpha = 0.18f) else Color(0xFF334155)
+                    ) {
+                        Text(
+                            text = if (isPersonalizationActive) "Active" else "Neutral",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isPersonalizationActive) EmeraldSuccess else Color(0xFF94A3B8),
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
                 }
             }
 
@@ -1045,6 +1134,7 @@ private fun EmptyChatWelcome(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -1201,8 +1291,12 @@ private fun EmptyChatWelcome(
                             text = suggestion,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFFE2E8F0)
+                            color = Color(0xFFE2E8F0),
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Icon(
                             imageVector = Icons.Default.Lightbulb,
                             contentDescription = null,
@@ -1338,12 +1432,52 @@ private fun ChatMessageItem(
 
                     // Copy action button for assistant responses
                     if (!isUser) {
+                        // Extracted NLP Topic Tags (matching ContextualChatbot in Secure-ML-with-BERT)
+                        val extractedTopics = remember(message.message) { QaChatEngine.extractTopics(message.message) }
+                        if (extractedTopics.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                extractedTopics.take(3).forEach { topicTag ->
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = CyanAccent.copy(alpha = 0.15f),
+                                        border = BorderStroke(0.5.dp, CyanAccent.copy(alpha = 0.3f))
+                                    ) {
+                                        Text(
+                                            text = topicTag,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = CyanAccent,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = EmeraldSuccess.copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    text = if (message.message.contains("PLI")) "⚡ PLI Conditioned" else "Curriculum Reference",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldSuccess,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
                             Text(
                                 text = "Copy",
                                 fontSize = 10.sp,

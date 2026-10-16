@@ -1,7 +1,0 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <style name="Theme.DLEPrototype" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-    </style>
-    <style name="Theme.Dle_prototype" parent="Theme.DLEPrototype" />
-</resources>
